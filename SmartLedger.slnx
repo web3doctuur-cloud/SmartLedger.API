@@ -2,7 +2,7 @@
   <Folder Name="/Solution Items/">
     <File Path=".env.example" />
     <File Path=".gitignore" />
-    <File Path="SmartLedger.API/render.yaml" />
+    <File Path="render.yaml" />
   </Folder>
   <Project Path="SmartLedger.API/SmartLedger.API.csproj" />
 </Solution>
