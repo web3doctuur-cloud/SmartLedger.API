@@ -6,7 +6,7 @@ EXPOSE 443
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Copy the project file from the subfolder
+# Copy csproj from subfolder
 COPY ["SmartLedger.API/SmartLedger.API.csproj", "."]
 RUN dotnet restore "SmartLedger.API.csproj"
 
@@ -14,9 +14,9 @@ RUN dotnet restore "SmartLedger.API.csproj"
 COPY . .
 WORKDIR "/src/SmartLedger.API"
 RUN dotnet build "SmartLedger.API.csproj" -c Release -o /app/build
-RUN dotnet publish "SmartLedger.API.csproj" -c Release -o /app/publish
+RUN dotnet publish "SmartLedger.API.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 FROM base AS final
 WORKDIR /app
-COPY --from=publish /app/publish .
+COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "SmartLedger.API.dll"]
