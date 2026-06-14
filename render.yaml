@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: smartledger-api
+    runtime: image
+    repo: https://github.com/web3doctuur-cloud/SmartLedger.API.git
+    plan: free
+    dockerfilePath: ./SmartLedger.API/Dockerfile
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
+      - key: JwtSettings__Secret
+        sync: false
+      - key: JwtSettings__Issuer
+        value: SmartLedgerAPI
+      - key: JwtSettings__Audience
+        value: SmartLedgerClient
+      - key: JwtSettings__ExpiryMinutes
+        value: "60"
