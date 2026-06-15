@@ -33,27 +33,80 @@ namespace SmartLedger.API.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDto model)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
-
-            var user = new IdentityUser
+            try
             {
-                UserName = model.Email,
-                Email = model.Email,
-                EmailConfirmed = true
-            };
+                Console.WriteLine($"REGISTER CALLED: {model.Email}");
 
-            var result = await _userManager.CreateAsync(user, model.Password);
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
 
-            if (!result.Succeeded)
-            {
-                return BadRequest(new { errors = result.Errors.Select(e => e.Description) });
+                // Check if email already exists
+                var existingUser = await _userManager.FindByEmailAsync(model.Email);
+
+                if (existingUser != null)
+                {
+                    return BadRequest(new
+                    {
+                        errors = new[]
+                        {
+                    $"An account with email '{model.Email}' already exists."
+                }
+                    });
+                }
+
+                var user = new IdentityUser
+                {
+                    UserName = model.Email,
+                    Email = model.Email,
+                    EmailConfirmed = true
+                };
+
+                Console.WriteLine("Creating user...");
+
+                var result = await _userManager.CreateAsync(user, model.Password);
+
+                Console.WriteLine($"CreateAsync Result: {result.Succeeded}");
+
+                if (!result.Succeeded)
+                {
+                    return BadRequest(new
+                    {
+                        errors = result.Errors.Select(e => e.Description)
+                    });
+                }
+
+                Console.WriteLine("User created.");
+
+                // Add role
+                var roleResult = await _userManager.AddToRoleAsync(user, "User");
+
+                if (!roleResult.Succeeded)
+                {
+                    return BadRequest(new
+                    {
+                        errors = roleResult.Errors.Select(e => e.Description)
+                    });
+                }
+
+                Console.WriteLine("Role assigned.");
+
+                return Ok(new
+                {
+                    message = "User registered successfully!"
+                });
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
 
-            // Add to default role
-            await _userManager.AddToRoleAsync(user, "User");
-
-            return Ok(new { message = "User registered successfully!" });
+                return StatusCode(500, new
+                {
+                    message = ex.Message,
+                    innerException = ex.InnerException?.Message
+                });
+            }
         }
 
         // ============================================================
