@@ -12,7 +12,7 @@ using SmartLedger.API.Data;
 namespace SmartLedger.API.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260614091553_InitialCreate")]
+    [Migration("20260615173012_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
