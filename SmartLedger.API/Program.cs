@@ -14,12 +14,14 @@ builder.Configuration.AddEnvironmentVariables();
 var isDevelopment = builder.Environment.IsDevelopment();
 var isProduction = builder.Environment.IsProduction();
 
+// CORS CONFIGURATION
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? new[]
 {
     "http://localhost:3000",
     "http://localhost:5173",
     "https://localhost:5173",
-    "https://smartledger.vercel.app"
+    "https://smartledger.vercel.app",
+    "https://smartledger-frontend.vercel.app"
 };
 
 builder.Services.AddCors(options =>
@@ -33,6 +35,7 @@ builder.Services.AddCors(options =>
     });
 });
 
+// DATABASE (PostgreSQL)
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string not found");
@@ -43,6 +46,10 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
         npgsqlOptions.EnableRetryOnFailure(3);
         npgsqlOptions.CommandTimeout(30);
     }));
+
+// ============================================================
+// IDENTITY & AUTHENTICATION
+// ============================================================
 
 builder.Services.AddIdentity<IdentityUser, IdentityRole>()
     .AddEntityFrameworkStores<ApplicationDbContext>()
@@ -91,11 +98,19 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<ILedgerService, LedgerService>();
 
+// ============================================================
+// API & SWAGGER
+// ============================================================
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-  
+
 var app = builder.Build();
+
+// ============================================================
+// MIDDLEWARE PIPELINE
+// ============================================================
 
 app.UseSwagger();
 app.UseSwaggerUI(c =>
@@ -104,7 +119,6 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = "swagger";
 });
 
-// Security headers
 app.UseHttpsRedirection();
 app.UseCors("VercelFrontend");
 app.UseAuthentication();
@@ -120,23 +134,86 @@ app.MapGet("/health", () => Results.Ok(new
 }));
 
 
+// DATABASE MIGRATIONS & ROLE SEEDING
+
 if (isProduction)
 {
     using (var scope = app.Services.CreateScope())
     {
-        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var services = scope.ServiceProvider;
         try
         {
+            // Run migrations
+            var dbContext = services.GetRequiredService<ApplicationDbContext>();
             await dbContext.Database.MigrateAsync();
             Console.WriteLine("Database migrations applied successfully.");
+
+            // Seed roles - ONLY "User" role (no Admin)
+            var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+            var userManager = services.GetRequiredService<UserManager<IdentityUser>>();
+
+            // Only create the "User" role
+            string roleName = "User";
+            if (!await roleManager.RoleExistsAsync(roleName))
+            {
+                await roleManager.CreateAsync(new IdentityRole(roleName));
+                Console.WriteLine($"Created role: {roleName}");
+            }
+
+            // Optional: Create a default admin for testing (if you want to keep one for testing)
+            var adminEmail = "admin@smartledger.com";
+            var adminUser = await userManager.FindByEmailAsync(adminEmail);
+            if (adminUser == null)
+            {
+                adminUser = new IdentityUser
+                {
+                    UserName = adminEmail,
+                    Email = adminEmail,
+                    EmailConfirmed = true
+                };
+                await userManager.CreateAsync(adminUser, "Admin@123");
+                await userManager.AddToRoleAsync(adminUser, "User"); // Admin has the User role
+                Console.WriteLine("Created admin user.");
+            }
+
+            Console.WriteLine("Role seeding completed.");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error applying migrations: {ex.Message}");
-            
+            Console.WriteLine($"Error applying migrations or seeding roles: {ex.Message}");
         }
     }
 }
+else // Development environment
+{
+    // In development, we don't auto-run migrations - let EF Core handle it
+    using (var scope = app.Services.CreateScope())
+    {
+        try
+        {
+            var services = scope.ServiceProvider;
+            var dbContext = services.GetRequiredService<ApplicationDbContext>();
 
+            // Just check if tables exist, create if needed
+            await dbContext.Database.EnsureCreatedAsync();
+            Console.WriteLine("Development database ensured.");
+
+            // Still need roles for local testing
+            var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+            var userManager = services.GetRequiredService<UserManager<IdentityUser>>();
+
+            string roleName = "User";
+            if (!await roleManager.RoleExistsAsync(roleName))
+            {
+                await roleManager.CreateAsync(new IdentityRole(roleName));
+                Console.WriteLine($"Created role: {roleName}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error in development seeding: {ex.Message}");
+        }
+    }
+}
 
 app.Run();
