@@ -115,55 +115,66 @@ namespace SmartLedger.API.Services
 
         public async Task<JournalEntry?> GetJournalEntryByIdAsync(int id)
         {
-            return await _context.JournalEntries
-                .Include(j => j.Lines)
-                    .ThenInclude(l => l.Account)
+            var entry = await _context.JournalEntries
                 .FirstOrDefaultAsync(j => j.Id == id);
-        }
 
-        public async Task<IEnumerable<JournalEntry>> GetAllJournalEntriesAsync(DateTime? fromDate = null, DateTime? toDate = null)
-        {
-            var query = _context.JournalEntries
-                .Include(j => j.Lines)
-                    .ThenInclude(l => l.Account)
-                .Where(j => j.IsActive);
-
-            if (fromDate.HasValue)
-                query = query.Where(j => j.EntryDate >= fromDate.Value);
-            if (toDate.HasValue)
-                query = query.Where(j => j.EntryDate <= toDate.Value);
-
-            var results = await query.OrderByDescending(j => j.EntryDate).ToListAsync();
-
-            // 🔧 FIX: Ensure Lines is never null and Account is never null
-            foreach (var entry in results)
+            if (entry != null)
             {
-                if (entry.Lines == null)
+                entry.Lines = await _context.JournalEntryLines
+                    .Where(l => l.JournalEntryId == entry.Id)
+                    .ToListAsync();
+
+                foreach (var line in entry.Lines)
                 {
-                    entry.Lines = new List<JournalEntryLine>();
-                }
-                else
-                {
-                    foreach (var line in entry.Lines)
+                    if (line.Account == null)
                     {
-                        if (line.Account == null)
-                        {
-                            line.Account = new Account
-                            {
-                                Id = line.AccountId,
-                                Name = "Unknown Account",
-                                AccountCode = "N/A",
-                                Type = "Unknown",
-                                NormalSide = "DEBIT"
-                            };
-                        }
+                        line.Account = await _context.Accounts.FindAsync(line.AccountId);
                     }
                 }
             }
 
-            return results;
+            return entry;
         }
 
+        public async Task<IEnumerable<JournalEntry>> GetAllJournalEntriesAsync(DateTime? fromDate = null, DateTime? toDate = null)
+        {
+            try
+            {
+                var query = _context.JournalEntries
+                    .Where(j => j.IsActive);
+
+                if (fromDate.HasValue)
+                    query = query.Where(j => j.EntryDate >= fromDate.Value);
+                if (toDate.HasValue)
+                    query = query.Where(j => j.EntryDate <= toDate.Value);
+
+                var results = await query.OrderByDescending(j => j.EntryDate).ToListAsync();
+
+                // Load lines separately to avoid null issues
+                foreach (var entry in results)
+                {
+                    entry.Lines = await _context.JournalEntryLines
+                        .Where(l => l.JournalEntryId == entry.Id)
+                        .ToListAsync();
+
+                    // Ensure each line has an Account
+                    foreach (var line in entry.Lines)
+                    {
+                        if (line.Account == null)
+                        {
+                            line.Account = await _context.Accounts.FindAsync(line.AccountId);
+                        }
+                    }
+                }
+
+                return results;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting journal entries");
+                throw;
+            }
+        }
         public async Task<bool> ApproveJournalEntryAsync(int id)
         {
             var entry = await _context.JournalEntries.FindAsync(id);
