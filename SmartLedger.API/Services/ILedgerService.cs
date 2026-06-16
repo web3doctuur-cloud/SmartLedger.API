@@ -1,4 +1,5 @@
-﻿using SmartLedger.API.Models;
+using SmartLedger.API.DTOs;
+using SmartLedger.API.Models;
 
 namespace SmartLedger.API.Services
 {
@@ -13,8 +14,8 @@ namespace SmartLedger.API.Services
 
         // Journal Entries
         Task<JournalEntry> CreateJournalEntryAsync(JournalEntry entry, List<JournalEntryLine> lines);
-        Task<JournalEntry?> GetJournalEntryByIdAsync(int id);
-        Task<IEnumerable<JournalEntry>> GetAllJournalEntriesAsync(DateTime? fromDate = null, DateTime? toDate = null);
+        Task<JournalEntryResponseDto?> GetJournalEntryByIdAsync(int id);
+        Task<IEnumerable<JournalEntryResponseDto>> GetAllJournalEntriesAsync(DateTime? fromDate = null, DateTime? toDate = null);
         Task<bool> ApproveJournalEntryAsync(int id);
         Task<bool> DeleteJournalEntryAsync(int id);
 

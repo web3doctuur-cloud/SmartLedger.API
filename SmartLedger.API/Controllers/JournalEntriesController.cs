@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartLedger.API.DTOs;
 using SmartLedger.API.Models;
@@ -74,7 +74,8 @@ namespace SmartLedger.API.Controllers
                     EntryDate = entryDto.EntryDate,
                     Description = entryDto.Description,
                     CreatedAt = DateTime.UtcNow,
-                    IsActive = true
+                    IsActive = true,
+                    UserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? ""
                 };
 
                 var lines = entryDto.Lines.Select(line => new JournalEntryLine
@@ -89,8 +90,9 @@ namespace SmartLedger.API.Controllers
                     IsActive = true
                 }).ToList();
 
-                var result = await _ledgerService.CreateJournalEntryAsync(entry, lines);
-                return CreatedAtAction(nameof(GetEntryById), new { id = result.Id }, result);
+                var createdEntry = await _ledgerService.CreateJournalEntryAsync(entry, lines);
+                var response = await _ledgerService.GetJournalEntryByIdAsync(createdEntry.Id);
+                return CreatedAtAction(nameof(GetEntryById), new { id = response.Id }, response);
             }
             catch (InvalidOperationException ex)
             {

@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using SmartLedger.API.Data;
+using SmartLedger.API.DTOs;
 using SmartLedger.API.Models;
 
 namespace SmartLedger.API.Services
@@ -113,30 +114,45 @@ namespace SmartLedger.API.Services
             return entry;
         }
 
-        public async Task<JournalEntry?> GetJournalEntryByIdAsync(int id)
+        public async Task<JournalEntryResponseDto?> GetJournalEntryByIdAsync(int id)
         {
             var entry = await _context.JournalEntries
                 .FirstOrDefaultAsync(j => j.Id == id);
 
-            if (entry != null)
+            if (entry == null) return null;
+
+            var lines = await _context.JournalEntryLines
+                .Where(l => l.JournalEntryId == entry.Id)
+                .Include(l => l.Account)
+                .ToListAsync();
+
+            return new JournalEntryResponseDto
             {
-                entry.Lines = await _context.JournalEntryLines
-                    .Where(l => l.JournalEntryId == entry.Id)
-                    .ToListAsync();
-
-                foreach (var line in entry.Lines)
+                Id = entry.Id,
+                EntryNumber = entry.EntryNumber,
+                EntryDate = entry.EntryDate,
+                Description = entry.Description,
+                IsApproved = entry.IsApproved,
+                ApprovedAt = entry.ApprovedAt,
+                CreatedAt = entry.CreatedAt,
+                Lines = lines.Select(line => new JournalEntryLineResponseDto
                 {
-                    if (line.Account == null)
-                    {
-                        line.Account = await _context.Accounts.FindAsync(line.AccountId);
-                    }
-                }
-            }
-
-            return entry;
+                    Id = line.Id,
+                    AccountId = line.AccountId,
+                    AccountCode = line.Account?.AccountCode ?? "",
+                    AccountName = line.Account?.Name ?? "",
+                    AccountType = line.Account?.Type ?? "",
+                    Debit = line.Debit,
+                    Credit = line.Credit,
+                    LineDescription = line.LineDescription,
+                    ReferenceNumber = line.ReferenceNumber,
+                    TaxAmount = line.TaxAmount,
+                    TotalAmount = line.TotalAmount
+                }).ToList()
+            };
         }
 
-        public async Task<IEnumerable<JournalEntry>> GetAllJournalEntriesAsync(DateTime? fromDate = null, DateTime? toDate = null)
+        public async Task<IEnumerable<JournalEntryResponseDto>> GetAllJournalEntriesAsync(DateTime? fromDate = null, DateTime? toDate = null)
         {
             try
             {
@@ -148,23 +164,43 @@ namespace SmartLedger.API.Services
                 if (toDate.HasValue)
                     query = query.Where(j => j.EntryDate <= toDate.Value);
 
-                var results = await query.OrderByDescending(j => j.EntryDate).ToListAsync();
+                var entries = await query
+                    .OrderByDescending(j => j.EntryDate)
+                    .ToListAsync();
 
-                // Load lines separately to avoid null issues
-                foreach (var entry in results)
+                var results = new List<JournalEntryResponseDto>();
+
+                foreach (var entry in entries)
                 {
-                    entry.Lines = await _context.JournalEntryLines
+                    var lines = await _context.JournalEntryLines
                         .Where(l => l.JournalEntryId == entry.Id)
+                        .Include(l => l.Account)
                         .ToListAsync();
 
-                    // Ensure each line has an Account
-                    foreach (var line in entry.Lines)
+                    results.Add(new JournalEntryResponseDto
                     {
-                        if (line.Account == null)
+                        Id = entry.Id,
+                        EntryNumber = entry.EntryNumber,
+                        EntryDate = entry.EntryDate,
+                        Description = entry.Description,
+                        IsApproved = entry.IsApproved,
+                        ApprovedAt = entry.ApprovedAt,
+                        CreatedAt = entry.CreatedAt,
+                        Lines = lines.Select(line => new JournalEntryLineResponseDto
                         {
-                            line.Account = await _context.Accounts.FindAsync(line.AccountId);
-                        }
-                    }
+                            Id = line.Id,
+                            AccountId = line.AccountId,
+                            AccountCode = line.Account?.AccountCode ?? "",
+                            AccountName = line.Account?.Name ?? "",
+                            AccountType = line.Account?.Type ?? "",
+                            Debit = line.Debit,
+                            Credit = line.Credit,
+                            LineDescription = line.LineDescription,
+                            ReferenceNumber = line.ReferenceNumber,
+                            TaxAmount = line.TaxAmount,
+                            TotalAmount = line.TotalAmount
+                        }).ToList()
+                    });
                 }
 
                 return results;
