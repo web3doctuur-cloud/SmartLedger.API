@@ -140,6 +140,9 @@ app.MapGet("/health", () => Results.Ok(new
     timestamp = DateTime.UtcNow
 }));
 
+// Simple public test endpoint
+app.MapGet("/test", () => "Hello from SmartLedger API! This is a public endpoint!");
+
 
 // DATABASE MIGRATIONS & ROLE SEEDING
 
