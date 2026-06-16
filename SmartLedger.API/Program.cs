@@ -14,6 +14,13 @@ builder.Configuration.AddEnvironmentVariables();
 var isDevelopment = builder.Environment.IsDevelopment();
 var isProduction = builder.Environment.IsProduction();
 
+// Configure Kestrel to use PORT environment variable for Render
+var port = Environment.GetEnvironmentVariable("PORT") ?? "5173";
+builder.WebHost.ConfigureKestrel(serverOptions =>
+{
+    serverOptions.ListenAnyIP(int.Parse(port));
+});
+
 // CORS CONFIGURATION
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? new[]
 {
@@ -158,22 +165,6 @@ if (isProduction)
             {
                 await roleManager.CreateAsync(new IdentityRole(roleName));
                 Console.WriteLine($"Created role: {roleName}");
-            }
-
-            // Optional: Create a default admin for testing (if you want to keep one for testing)
-            var adminEmail = "admin@smartledger.com";
-            var adminUser = await userManager.FindByEmailAsync(adminEmail);
-            if (adminUser == null)
-            {
-                adminUser = new IdentityUser
-                {
-                    UserName = adminEmail,
-                    Email = adminEmail,
-                    EmailConfirmed = true
-                };
-                await userManager.CreateAsync(adminUser, "Admin@123");
-                await userManager.AddToRoleAsync(adminUser, "User"); // Admin has the User role
-                Console.WriteLine("Created admin user.");
             }
 
             Console.WriteLine("Role seeding completed.");
