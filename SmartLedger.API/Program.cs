@@ -21,24 +21,14 @@ builder.WebHost.ConfigureKestrel(serverOptions =>
     serverOptions.ListenAnyIP(int.Parse(port));
 });
 
-// CORS CONFIGURATION
-var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? new[]
-{
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "https://localhost:5173",
-    "https://smartledger.vercel.app",
-    "https://smartledger-frontend.vercel.app"
-};
-
+// CORS CONFIGURATION - Allow all origins for quick testing
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("VercelFrontend", policy =>
+    options.AddPolicy("AllowAll", policy =>
     {
-        policy.WithOrigins(allowedOrigins)
+        policy.AllowAnyOrigin()
               .AllowAnyMethod()
-              .AllowAnyHeader()
-              .AllowCredentials();
+              .AllowAnyHeader();
     });
 });
 
@@ -127,7 +117,7 @@ app.UseSwaggerUI(c =>
 });
 
 app.UseHttpsRedirection();
-app.UseCors("VercelFrontend");
+app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
