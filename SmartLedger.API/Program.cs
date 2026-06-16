@@ -106,7 +106,7 @@ builder.Services.AddSwaggerGen();
 var app = builder.Build();
 
 // ============================================================
-// MIDDLEWARE PIPELINE
+// MIDDLEWARE PIPELINE (CORRECT ORDER!)
 // ============================================================
 
 app.UseSwagger();
@@ -116,10 +116,13 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = "swagger";
 });
 
-app.UseHttpsRedirection();
+// CORS FIRST!
 app.UseCors("AllowAll");
+
+// Authentication before Authorization
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.MapControllers();
 
 // Health check endpoint
