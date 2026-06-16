@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using SmartLedger.API.Data;
+using SmartLedger.API.Models;
 using SmartLedger.API.Services;
 using System.Text;
 
@@ -162,24 +163,6 @@ if (isProduction)
                 Console.WriteLine($"Created role: {roleName}");
             }
 
-            // Seed initial accounts if none exist
-            if (!await dbContext.Accounts.AnyAsync())
-            {
-                var accounts = new List<Account>
-                {
-                    new() { AccountCode = "1000", Name = "Cash", Type = "Asset", NormalSide = "DEBIT" },
-                    new() { AccountCode = "1100", Name = "Accounts Receivable", Type = "Asset", NormalSide = "DEBIT" },
-                    new() { AccountCode = "2000", Name = "Accounts Payable", Type = "Liability", NormalSide = "CREDIT" },
-                    new() { AccountCode = "3000", Name = "Owner's Capital", Type = "Equity", NormalSide = "CREDIT" },
-                    new() { AccountCode = "4000", Name = "Sales Revenue", Type = "Income", NormalSide = "CREDIT" },
-                    new() { AccountCode = "5000", Name = "Cost of Goods Sold", Type = "Expense", NormalSide = "DEBIT" },
-                    new() { AccountCode = "6000", Name = "Operating Expenses", Type = "Expense", NormalSide = "DEBIT" }
-                };
-                dbContext.Accounts.AddRange(accounts);
-                await dbContext.SaveChangesAsync();
-                Console.WriteLine("Seed accounts created!");
-            }
-
             Console.WriteLine("Role seeding completed.");
         }
         catch (Exception ex)
@@ -211,24 +194,6 @@ else // Development environment
             {
                 await roleManager.CreateAsync(new IdentityRole(roleName));
                 Console.WriteLine($"Created role: {roleName}");
-            }
-
-            // Seed initial accounts if none exist
-            if (!await dbContext.Accounts.AnyAsync())
-            {
-                var accounts = new List<Account>
-                {
-                    new() { AccountCode = "1000", Name = "Cash", Type = "Asset", NormalSide = "DEBIT" },
-                    new() { AccountCode = "1100", Name = "Accounts Receivable", Type = "Asset", NormalSide = "DEBIT" },
-                    new() { AccountCode = "2000", Name = "Accounts Payable", Type = "Liability", NormalSide = "CREDIT" },
-                    new() { AccountCode = "3000", Name = "Owner's Capital", Type = "Equity", NormalSide = "CREDIT" },
-                    new() { AccountCode = "4000", Name = "Sales Revenue", Type = "Income", NormalSide = "CREDIT" },
-                    new() { AccountCode = "5000", Name = "Cost of Goods Sold", Type = "Expense", NormalSide = "DEBIT" },
-                    new() { AccountCode = "6000", Name = "Operating Expenses", Type = "Expense", NormalSide = "DEBIT" }
-                };
-                dbContext.Accounts.AddRange(accounts);
-                await dbContext.SaveChangesAsync();
-                Console.WriteLine("Seed accounts created!");
             }
         }
         catch (Exception ex)
