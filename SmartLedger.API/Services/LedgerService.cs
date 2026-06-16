@@ -103,6 +103,7 @@ namespace SmartLedger.API.Services
             {
                 line.JournalEntryId = entry.Id;
                 line.CreatedAt = DateTime.UtcNow;
+                line.IsActive = true;
                 _context.JournalEntryLines.Add(line);
             }
 
@@ -116,7 +117,7 @@ namespace SmartLedger.API.Services
         {
             return await _context.JournalEntries
                 .Include(j => j.Lines)
-                .ThenInclude(l => l.Account)
+                    .ThenInclude(l => l.Account)
                 .FirstOrDefaultAsync(j => j.Id == id);
         }
 
@@ -124,6 +125,7 @@ namespace SmartLedger.API.Services
         {
             var query = _context.JournalEntries
                 .Include(j => j.Lines)
+                    .ThenInclude(l => l.Account)
                 .Where(j => j.IsActive);
 
             if (fromDate.HasValue)
@@ -131,7 +133,35 @@ namespace SmartLedger.API.Services
             if (toDate.HasValue)
                 query = query.Where(j => j.EntryDate <= toDate.Value);
 
-            return await query.OrderByDescending(j => j.EntryDate).ToListAsync();
+            var results = await query.OrderByDescending(j => j.EntryDate).ToListAsync();
+
+            // 🔧 FIX: Ensure Lines is never null and Account is never null
+            foreach (var entry in results)
+            {
+                if (entry.Lines == null)
+                {
+                    entry.Lines = new List<JournalEntryLine>();
+                }
+                else
+                {
+                    foreach (var line in entry.Lines)
+                    {
+                        if (line.Account == null)
+                        {
+                            line.Account = new Account
+                            {
+                                Id = line.AccountId,
+                                Name = "Unknown Account",
+                                AccountCode = "N/A",
+                                Type = "Unknown",
+                                NormalSide = "DEBIT"
+                            };
+                        }
+                    }
+                }
+            }
+
+            return results;
         }
 
         public async Task<bool> ApproveJournalEntryAsync(int id)
