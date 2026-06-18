@@ -40,20 +40,34 @@ namespace SmartLedger.API.Data
                 .Property(t => t.UnitPrice)
                 .HasColumnType("decimal(18,2)");
 
-            builder.Entity<Account>()
-                .HasIndex(a => a.UserId);
-
+            // 🔧 FIX: Add UserId indexes and relationships
             builder.Entity<Product>()
-                .HasIndex(p => p.UserId);
+                .HasIndex(p => p.UserId)
+                .HasDatabaseName("IX_Products_UserId");
 
             builder.Entity<InventoryTransaction>()
-                .HasIndex(t => t.UserId);
+                .HasIndex(t => t.UserId)
+                .HasDatabaseName("IX_InventoryTransactions_UserId");
+
+            builder.Entity<Account>()
+                .HasIndex(a => a.UserId)
+                .HasDatabaseName("IX_Accounts_UserId");
 
             builder.Entity<JournalEntry>()
-                .HasIndex(j => j.UserId);
+                .HasIndex(j => j.UserId)
+                .HasDatabaseName("IX_JournalEntries_UserId");
 
             builder.Entity<TodoItem>()
-                .HasIndex(t => t.UserId);
+                .HasIndex(t => t.UserId)
+                .HasDatabaseName("IX_TodoItems_UserId");
+
+            // 🔧 FIX: Configure Product-Transaction relationship
+            builder.Entity<InventoryTransaction>()
+                .HasOne(t => t.Product)
+                .WithMany()
+                .HasForeignKey(t => t.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }
+
