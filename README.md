@@ -99,20 +99,33 @@ A modern .NET 10 Web API for smart ledger and inventory management with PostgreS
 
 ### Inventory
 
-- `GET /api/inventory/transactions` - Get all inventory transactions
+- `GET /api/inventory/transactions` - Get inventory transactions for the current user
 - `POST /api/inventory/transactions` - Create a new inventory transaction
 
 ### Reports
 
+- `GET /api/reports/income-statement` - Get profit & loss report
+- `GET /api/reports/profit-loss` - Alias for profit & loss
+- `GET /api/reports/balance-sheet` - Get balance sheet report
 - `GET /api/reports/trial-balance` - Get trial balance report
-- `GET /api/reports/profit-loss` - Get profit & loss report
+- `GET /api/reports/inventory-summary` - Get inventory summary report
+- `GET /api/reports/inventory-valuation` - Get inventory valuation report
+- `GET /api/reports/sales-report` - Get sales report
+- `GET /api/reports/expenses-report` - Get expenses report
 
 ### Export
 
 - `GET /api/export/products/excel` - Export products to Excel
 - `GET /api/export/products/csv` - Export products to CSV
+- `GET /api/export/accounts/excel` - Export accounts to Excel
+- `GET /api/export/accounts/csv` - Export accounts to CSV
 - `GET /api/export/journal-entries/excel` - Export journal entries to Excel
 - `GET /api/export/journal-entries/csv` - Export journal entries to CSV
+- `GET /api/export/transactions/excel` - Export inventory transactions to Excel
+- `GET /api/export/transactions/csv` - Export inventory transactions to CSV
+- `GET /api/export/sales/csv` - Export sales report to CSV
+- `GET /api/export/inventory-summary/excel` - Export inventory summary to Excel
+- `GET /api/export/ledger/excel` - Export general ledger to Excel
 
 ## Environment Variables (Production)
 

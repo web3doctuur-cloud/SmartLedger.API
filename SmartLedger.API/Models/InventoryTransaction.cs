@@ -26,5 +26,6 @@ namespace SmartLedger.API.Models
         public decimal? TotalAmount => UnitPrice.HasValue ? UnitPrice.Value * Math.Abs(QuantityChange) : null;
 
         public string? ReferenceNumber { get; set; } // Invoice number, PO number
+        public string UserId { get; set; } = string.Empty;
     }
 }

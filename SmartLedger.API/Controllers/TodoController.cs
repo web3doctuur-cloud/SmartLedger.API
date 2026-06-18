@@ -39,7 +39,7 @@ namespace SmartLedger.API.Controllers
                 .ThenBy(t => t.DueDate)
                 .ToListAsync();
 
-            var response = todos.Select(t => MapToTodoResponseDto(t));
+            var response = todos.Select(t => MapToTodoResponseDto(t, userId));
             return Ok(response);
         }
 
@@ -60,7 +60,7 @@ namespace SmartLedger.API.Controllers
                 .ThenBy(t => t.DueDate)
                 .ToListAsync();
 
-            var response = todos.Select(t => MapToTodoResponseDto(t));
+            var response = todos.Select(t => MapToTodoResponseDto(t, userId));
             return Ok(response);
         }
 
@@ -81,7 +81,7 @@ namespace SmartLedger.API.Controllers
             if (todo == null)
                 return NotFound(new { message = "Todo item not found" });
 
-            return Ok(MapToTodoResponseDto(todo));
+            return Ok(MapToTodoResponseDto(todo, userId));
         }
 
         // ============================================================
@@ -116,7 +116,7 @@ namespace SmartLedger.API.Controllers
             await _context.SaveChangesAsync();
 
             _logger.LogInformation($"Todo created: {todo.Title} for user {userId}");
-            return CreatedAtAction(nameof(GetTodoById), new { id = todo.Id }, MapToTodoResponseDto(todo));
+            return CreatedAtAction(nameof(GetTodoById), new { id = todo.Id }, MapToTodoResponseDto(todo, userId));
         }
 
         // ============================================================
@@ -150,7 +150,7 @@ namespace SmartLedger.API.Controllers
             todo.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
-            return Ok(MapToTodoResponseDto(todo));
+            return Ok(MapToTodoResponseDto(todo, userId));
         }
 
         // ============================================================
@@ -175,7 +175,7 @@ namespace SmartLedger.API.Controllers
             todo.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
-            return Ok(new { message = "Todo completed", todo = MapToTodoResponseDto(todo) });
+            return Ok(new { message = "Todo completed", todo = MapToTodoResponseDto(todo, userId) });
         }
 
         // ============================================================
@@ -199,7 +199,7 @@ namespace SmartLedger.API.Controllers
             todo.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
-            return Ok(MapToTodoResponseDto(todo));
+            return Ok(MapToTodoResponseDto(todo, userId));
         }
 
         // ============================================================
@@ -230,12 +230,12 @@ namespace SmartLedger.API.Controllers
         // PRIVATE HELPER METHODS
         // ============================================================
 
-        private TodoResponseDto MapToTodoResponseDto(TodoItem todo)
+        private TodoResponseDto MapToTodoResponseDto(TodoItem todo, string userId)
         {
             string? relatedProductName = null;
             if (todo.RelatedProductId.HasValue)
             {
-                var product = _context.Products.Find(todo.RelatedProductId.Value);
+                var product = _context.Products.FirstOrDefault(p => p.Id == todo.RelatedProductId.Value && p.UserId == userId);
                 relatedProductName = product?.Name;
             }
 

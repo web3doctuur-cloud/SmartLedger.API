@@ -36,6 +36,34 @@ namespace SmartLedger.API.DTOs
     }
 
     /// <summary>
+    /// DTO for creating a direct inventory transaction
+    /// </summary>
+    public class CreateInventoryTransactionDto
+    {
+        [Required(ErrorMessage = "Product ID is required")]
+        public int ProductId { get; set; }
+
+        [Required(ErrorMessage = "Transaction type is required")]
+        [RegularExpression("PURCHASE|SALE|ADJUSTMENT", ErrorMessage = "Transaction type must be PURCHASE, SALE, or ADJUSTMENT")]
+        public string TransactionType { get; set; } = "ADJUSTMENT";
+
+        [Range(1, int.MaxValue, ErrorMessage = "Quantity must be at least 1")]
+        public int Quantity { get; set; } = 1;
+
+        [Range(0, int.MaxValue, ErrorMessage = "New quantity cannot be negative")]
+        public int? NewQuantity { get; set; }
+
+        [Range(0.01, double.MaxValue, ErrorMessage = "Unit price must be greater than 0")]
+        public decimal? UnitPrice { get; set; }
+
+        [StringLength(500, ErrorMessage = "Notes cannot exceed 500 characters")]
+        public string? Notes { get; set; }
+
+        [StringLength(50, ErrorMessage = "Reference number cannot exceed 50 characters")]
+        public string? ReferenceNumber { get; set; }
+    }
+
+    /// <summary>
     /// DTO for inventory transaction response
     /// </summary>
     public class InventoryTransactionResponseDto

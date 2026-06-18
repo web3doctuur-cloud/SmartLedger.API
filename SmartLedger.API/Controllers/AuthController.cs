@@ -42,8 +42,10 @@ namespace SmartLedger.API.Controllers
                     return BadRequest(ModelState);
                 }
 
+                var normalizedEmail = model.Email.Trim();
+
                 // Check if email already exists
-                var existingUser = await _userManager.FindByEmailAsync(model.Email);
+                var existingUser = await _userManager.FindByEmailAsync(normalizedEmail);
 
                 if (existingUser != null)
                 {
@@ -58,8 +60,8 @@ namespace SmartLedger.API.Controllers
 
                 var user = new IdentityUser
                 {
-                    UserName = model.Email,
-                    Email = model.Email,
+                    UserName = normalizedEmail,
+                    Email = normalizedEmail,
                     EmailConfirmed = true
                 };
 
@@ -119,7 +121,8 @@ namespace SmartLedger.API.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var user = await _userManager.FindByEmailAsync(model.Email);
+            var email = model.Email.Trim();
+            var user = await _userManager.FindByEmailAsync(email);
             if (user == null)
                 return Unauthorized(new { message = "Invalid email or password" });
 
@@ -136,8 +139,8 @@ namespace SmartLedger.API.Controllers
                 Email = user.Email!,
                 Roles = roles.ToList(),
                 UserId = user.Id,
-                ExpiresAt = DateTime.UtcNow.AddMinutes(60)
-            };
+                    ExpiresAt = DateTime.UtcNow.AddMinutes(int.Parse(_configuration["JwtSettings:ExpiryMinutes"] ?? "60"))
+                };
 
             return Ok(response);
         }
@@ -158,6 +161,7 @@ namespace SmartLedger.API.Controllers
 
             var claims = new List<Claim>
             {
+                new Claim(ClaimTypes.NameIdentifier, user.Id),
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email!),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),

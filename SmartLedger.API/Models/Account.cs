@@ -20,5 +20,6 @@ namespace SmartLedger.API.Models
 
         public int? ParentAccountId { get; set; }
         public decimal Balance { get; set; } = 0;
+        public string UserId { get; set; } = string.Empty;
     }
 }

@@ -6,18 +6,18 @@ namespace SmartLedger.API.Services
     public interface ILedgerService
     {
         // Account Management
-        Task<Account?> GetAccountByIdAsync(int id);
-        Task<IEnumerable<Account>> GetAllAccountsAsync();
-        Task<Account> CreateAccountAsync(Account account);
-        Task<Account?> UpdateAccountAsync(int id, Account account);
-        Task<bool> DeleteAccountAsync(int id);
+        Task<Account?> GetAccountByIdAsync(int id, string userId);
+        Task<IEnumerable<Account>> GetAllAccountsAsync(string userId);
+        Task<Account> CreateAccountAsync(Account account, string userId);
+        Task<Account?> UpdateAccountAsync(int id, Account account, string userId);
+        Task<bool> DeleteAccountAsync(int id, string userId);
 
         // Journal Entries
-        Task<JournalEntry> CreateJournalEntryAsync(JournalEntry entry, List<JournalEntryLine> lines);
-        Task<JournalEntryResponseDto?> GetJournalEntryByIdAsync(int id);
-        Task<IEnumerable<JournalEntryResponseDto>> GetAllJournalEntriesAsync(DateTime? fromDate = null, DateTime? toDate = null);
-        Task<bool> ApproveJournalEntryAsync(int id);
-        Task<bool> DeleteJournalEntryAsync(int id);
+        Task<JournalEntry> CreateJournalEntryAsync(JournalEntry entry, List<JournalEntryLine> lines, string userId);
+        Task<JournalEntryResponseDto?> GetJournalEntryByIdAsync(int id, string userId);
+        Task<IEnumerable<JournalEntryResponseDto>> GetAllJournalEntriesAsync(string userId, DateTime? fromDate = null, DateTime? toDate = null);
+        Task<bool> ApproveJournalEntryAsync(int id, string userId);
+        Task<bool> DeleteJournalEntryAsync(int id, string userId);
 
         // Validation
         bool ValidateDoubleEntry(List<JournalEntryLine> lines);
@@ -25,8 +25,8 @@ namespace SmartLedger.API.Services
         decimal GetTotalCredits(List<JournalEntryLine> lines);
 
         // Reports
-        Task<decimal> GetAccountBalanceAsync(int accountId);
-        Task<Dictionary<string, decimal>> GetTrialBalanceAsync();
-        Task<(decimal Income, decimal Expenses, decimal NetProfit)> GetProfitLossAsync(DateTime startDate, DateTime endDate);
+        Task<decimal> GetAccountBalanceAsync(int accountId, string userId, DateTime? asOfDate = null);
+        Task<Dictionary<string, decimal>> GetTrialBalanceAsync(string userId, DateTime? asOfDate = null);
+        Task<(decimal Income, decimal Expenses, decimal NetProfit)> GetProfitLossAsync(DateTime startDate, DateTime endDate, string userId);
     }
 }

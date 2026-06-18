@@ -43,5 +43,7 @@ namespace SmartLedger.API.Models
         // Barcode/SKU
         [StringLength(50)]
         public string? SKU { get; set; }
+
+        public string UserId { get; set; } = string.Empty;
     }
 }

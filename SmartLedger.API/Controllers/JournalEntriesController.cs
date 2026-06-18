@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartLedger.API.DTOs;
+using SmartLedger.API.Extensions;
 using SmartLedger.API.Models;
 using SmartLedger.API.Services;
 
@@ -25,7 +26,11 @@ namespace SmartLedger.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAllEntries()
         {
-            var entries = await _ledgerService.GetAllJournalEntriesAsync();
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            var entries = await _ledgerService.GetAllJournalEntriesAsync(userId);
             return Ok(entries);
         }
 
@@ -36,7 +41,11 @@ namespace SmartLedger.API.Controllers
         [HttpGet("{id}")]
         public async Task<IActionResult> GetEntryById(int id)
         {
-            var entry = await _ledgerService.GetJournalEntryByIdAsync(id);
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            var entry = await _ledgerService.GetJournalEntryByIdAsync(id, userId);
             if (entry == null)
                 return NotFound(new { message = $"Journal entry with ID {id} not found" });
             return Ok(entry);
@@ -54,6 +63,10 @@ namespace SmartLedger.API.Controllers
 
             try
             {
+                var userId = User.GetSmartLedgerUserId();
+                if (string.IsNullOrWhiteSpace(userId))
+                    return Unauthorized();
+
                 // Validate double-entry
                 var totalDebits = entryDto.Lines.Sum(l => l.Debit);
                 var totalCredits = entryDto.Lines.Sum(l => l.Credit);
@@ -75,7 +88,7 @@ namespace SmartLedger.API.Controllers
                     Description = entryDto.Description,
                     CreatedAt = DateTime.UtcNow,
                     IsActive = true,
-                    UserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? ""
+                    UserId = userId
                 };
 
                 var lines = entryDto.Lines.Select(line => new JournalEntryLine
@@ -90,8 +103,11 @@ namespace SmartLedger.API.Controllers
                     IsActive = true
                 }).ToList();
 
-                var createdEntry = await _ledgerService.CreateJournalEntryAsync(entry, lines);
-                var response = await _ledgerService.GetJournalEntryByIdAsync(createdEntry.Id);
+                var createdEntry = await _ledgerService.CreateJournalEntryAsync(entry, lines, userId);
+                var response = await _ledgerService.GetJournalEntryByIdAsync(createdEntry.Id, userId);
+                if (response == null)
+                    return StatusCode(500, new { message = "Journal entry was created but could not be reloaded" });
+
                 return CreatedAtAction(nameof(GetEntryById), new { id = response.Id }, response);
             }
             catch (InvalidOperationException ex)
@@ -111,7 +127,11 @@ namespace SmartLedger.API.Controllers
         [HttpPost("{id}/approve")]
         public async Task<IActionResult> ApproveEntry(int id)
         {
-            var result = await _ledgerService.ApproveJournalEntryAsync(id);
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            var result = await _ledgerService.ApproveJournalEntryAsync(id, userId);
             if (!result)
                 return NotFound(new { message = $"Journal entry with ID {id} not found" });
             return Ok(new { message = "Journal entry approved successfully" });
@@ -124,7 +144,11 @@ namespace SmartLedger.API.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteEntry(int id)
         {
-            var result = await _ledgerService.DeleteJournalEntryAsync(id);
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            var result = await _ledgerService.DeleteJournalEntryAsync(id, userId);
             if (!result)
                 return NotFound(new { message = $"Journal entry with ID {id} not found" });
             return Ok(new { message = "Journal entry deleted successfully" });

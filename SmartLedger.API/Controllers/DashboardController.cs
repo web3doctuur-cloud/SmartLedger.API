@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartLedger.API.Data;
 using SmartLedger.API.DTOs;
+using SmartLedger.API.Extensions;
 using SmartLedger.API.Services;
 
 namespace SmartLedger.API.Controllers
@@ -36,20 +37,24 @@ namespace SmartLedger.API.Controllers
         [HttpGet("summary")]
         public async Task<IActionResult> GetDashboardSummary()
         {
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
             // Inventory stats
-            var totalProducts = await _context.Products.CountAsync(p => p.IsActive);
-            var totalValue = await _inventoryService.GetTotalInventoryValueAsync();
-            var expectedRevenue = await _inventoryService.GetTotalExpectedRevenueAsync();
-            var lowStockProducts = await _inventoryService.GetLowStockProductsAsync(10);
+            var totalProducts = await _context.Products.CountAsync(p => p.IsActive && p.UserId == userId);
+            var totalValue = await _inventoryService.GetTotalInventoryValueAsync(userId);
+            var expectedRevenue = await _inventoryService.GetTotalExpectedRevenueAsync(userId);
+            var lowStockProducts = await _inventoryService.GetLowStockProductsAsync(userId, 10);
             var lowStockCount = lowStockProducts.Count();
 
             // Todo stats
-            var pendingTasks = await _context.TodoItems.CountAsync(t => t.Status != "COMPLETED" && t.IsActive);
-            var completedTasks = await _context.TodoItems.CountAsync(t => t.Status == "COMPLETED" && t.IsActive);
+            var pendingTasks = await _context.TodoItems.CountAsync(t => t.Status != "COMPLETED" && t.IsActive && t.UserId == userId);
+            var completedTasks = await _context.TodoItems.CountAsync(t => t.Status == "COMPLETED" && t.IsActive && t.UserId == userId);
 
             // Accounting stats (last 30 days)
             var startDate = DateTime.UtcNow.AddDays(-30);
-            var (income, expenses, netProfit) = await _ledgerService.GetProfitLossAsync(startDate, DateTime.UtcNow);
+            var (income, expenses, netProfit) = await _ledgerService.GetProfitLossAsync(startDate, DateTime.UtcNow, userId);
 
             // FIX: Convert decimal to double for ProfitMargin
             var profitMarginValue = income > 0 ? (double)((netProfit / income) * 100) : 0;
@@ -100,11 +105,16 @@ namespace SmartLedger.API.Controllers
         [HttpGet("recent-activity")]
         public async Task<IActionResult> GetRecentActivity([FromQuery] int limit = 20)
         {
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
             var activities = new List<RecentActivityDto>();
 
             // Recent inventory transactions
             var recentTransactions = await _context.InventoryTransactions
                 .Include(t => t.Product)
+                .Where(t => t.UserId == userId && t.IsActive)
                 .OrderByDescending(t => t.CreatedAt)
                 .Take(limit)
                 .Select(t => new RecentActivityDto
@@ -122,6 +132,7 @@ namespace SmartLedger.API.Controllers
 
             // Recent journal entries
             var recentEntries = await _context.JournalEntries
+                .Where(j => j.UserId == userId && j.IsActive)
                 .OrderByDescending(j => j.CreatedAt)
                 .Take(limit)
                 .Select(j => new RecentActivityDto
@@ -139,7 +150,7 @@ namespace SmartLedger.API.Controllers
 
             // Recent todo completions
             var recentTodos = await _context.TodoItems
-                .Where(t => t.CompletedAt.HasValue)
+                .Where(t => t.CompletedAt.HasValue && t.UserId == userId && t.IsActive)
                 .OrderByDescending(t => t.CompletedAt)
                 .Take(limit)
                 .Select(t => new RecentActivityDto
@@ -171,13 +182,17 @@ namespace SmartLedger.API.Controllers
         [HttpGet("quick-stats")]
         public async Task<IActionResult> GetQuickStats()
         {
-            var totalProducts = await _context.Products.CountAsync(p => p.IsActive);
-            var lowStockCount = (await _inventoryService.GetLowStockProductsAsync()).Count();
-            var pendingTasks = await _context.TodoItems.CountAsync(t => t.Status != "COMPLETED" && t.IsActive);
-            var totalValue = await _inventoryService.GetTotalInventoryValueAsync();
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            var totalProducts = await _context.Products.CountAsync(p => p.IsActive && p.UserId == userId);
+            var lowStockCount = (await _inventoryService.GetLowStockProductsAsync(userId)).Count();
+            var pendingTasks = await _context.TodoItems.CountAsync(t => t.Status != "COMPLETED" && t.IsActive && t.UserId == userId);
+            var totalValue = await _inventoryService.GetTotalInventoryValueAsync(userId);
 
             var startDate = DateTime.UtcNow.AddDays(-30);
-            var (income, expenses, netProfit) = await _ledgerService.GetProfitLossAsync(startDate, DateTime.UtcNow);
+            var (income, expenses, netProfit) = await _ledgerService.GetProfitLossAsync(startDate, DateTime.UtcNow, userId);
 
             var response = new QuickStatsDto
             {

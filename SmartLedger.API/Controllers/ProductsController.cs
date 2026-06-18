@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartLedger.API.DTOs;
+using SmartLedger.API.Extensions;
 using SmartLedger.API.Models;
 using SmartLedger.API.Services;
 
@@ -27,7 +28,11 @@ namespace SmartLedger.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAllProducts()
         {
-            var products = await _inventoryService.GetAllProductsAsync();
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            var products = await _inventoryService.GetAllProductsAsync(userId);
             var response = products.Select(p => MapToProductResponseDto(p));
             return Ok(response);
         }
@@ -39,7 +44,11 @@ namespace SmartLedger.API.Controllers
         [HttpGet("{id}")]
         public async Task<IActionResult> GetProductById(int id)
         {
-            var product = await _inventoryService.GetProductByIdAsync(id);
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            var product = await _inventoryService.GetProductByIdAsync(id, userId);
             if (product == null)
                 return NotFound(new { message = $"Product with ID {id} not found" });
 
@@ -53,7 +62,11 @@ namespace SmartLedger.API.Controllers
         [HttpGet("category/{category}")]
         public async Task<IActionResult> GetProductsByCategory(string category)
         {
-            var products = await _inventoryService.GetProductsByCategoryAsync(category);
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            var products = await _inventoryService.GetProductsByCategoryAsync(category, userId);
             var response = products.Select(p => MapToProductSummaryDto(p));
             return Ok(response);
         }
@@ -65,7 +78,11 @@ namespace SmartLedger.API.Controllers
         [HttpGet("low-stock")]
         public async Task<IActionResult> GetLowStockProducts([FromQuery] int threshold = 10)
         {
-            var products = await _inventoryService.GetLowStockProductsAsync(threshold);
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            var products = await _inventoryService.GetLowStockProductsAsync(userId, threshold);
             var response = products.Select(p => new
             {
                 p.Id,
@@ -85,10 +102,14 @@ namespace SmartLedger.API.Controllers
         [HttpGet("statistics/summary")]
         public async Task<IActionResult> GetInventoryStatistics()
         {
-            var totalValue = await _inventoryService.GetTotalInventoryValueAsync();
-            var expectedRevenue = await _inventoryService.GetTotalExpectedRevenueAsync();
-            var potentialProfit = await _inventoryService.GetTotalPotentialProfitAsync();
-            var byCategory = await _inventoryService.GetInventoryValueByCategoryAsync();
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            var totalValue = await _inventoryService.GetTotalInventoryValueAsync(userId);
+            var expectedRevenue = await _inventoryService.GetTotalExpectedRevenueAsync(userId);
+            var potentialProfit = await _inventoryService.GetTotalPotentialProfitAsync(userId);
+            var byCategory = await _inventoryService.GetInventoryValueByCategoryAsync(userId);
 
             return Ok(new
             {
@@ -112,6 +133,10 @@ namespace SmartLedger.API.Controllers
 
             try
             {
+                var userId = User.GetSmartLedgerUserId();
+                if (string.IsNullOrWhiteSpace(userId))
+                    return Unauthorized();
+
                 var product = new Product
                 {
                     Name = productDto.Name,
@@ -125,7 +150,7 @@ namespace SmartLedger.API.Controllers
                     SKU = productDto.SKU
                 };
 
-                var createdProduct = await _inventoryService.CreateProductAsync(product);
+                var createdProduct = await _inventoryService.CreateProductAsync(product, userId);
                 return CreatedAtAction(nameof(GetProductById), new { id = createdProduct.Id }, MapToProductResponseDto(createdProduct));
             }
             catch (Exception ex)
@@ -145,7 +170,11 @@ namespace SmartLedger.API.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var existingProduct = await _inventoryService.GetProductByIdAsync(id);
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            var existingProduct = await _inventoryService.GetProductByIdAsync(id, userId);
             if (existingProduct == null)
                 return NotFound(new { message = $"Product with ID {id} not found" });
 
@@ -169,7 +198,7 @@ namespace SmartLedger.API.Controllers
             if (productDto.IsActive.HasValue)
                 existingProduct.IsActive = productDto.IsActive.Value;
 
-            var updatedProduct = await _inventoryService.UpdateProductAsync(id, existingProduct);
+            var updatedProduct = await _inventoryService.UpdateProductAsync(id, existingProduct, userId);
             return Ok(MapToProductResponseDto(updatedProduct!));
         }
 
@@ -183,7 +212,11 @@ namespace SmartLedger.API.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var product = await _inventoryService.IncreaseQuantityAsync(id, model.Quantity, model.Notes, model.UnitPrice);
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            var product = await _inventoryService.IncreaseQuantityAsync(id, model.Quantity, userId, model.Notes, model.UnitPrice);
             if (product == null)
                 return NotFound(new { message = $"Product with ID {id} not found" });
 
@@ -214,7 +247,11 @@ namespace SmartLedger.API.Controllers
 
             try
             {
-                var product = await _inventoryService.DecreaseQuantityAsync(id, model.Quantity, model.Notes, model.UnitPrice);
+                var userId = User.GetSmartLedgerUserId();
+                if (string.IsNullOrWhiteSpace(userId))
+                    return Unauthorized();
+
+                var product = await _inventoryService.DecreaseQuantityAsync(id, model.Quantity, userId, model.Notes, model.UnitPrice);
                 if (product == null)
                     return NotFound(new { message = $"Product with ID {id} not found" });
 
@@ -248,7 +285,11 @@ namespace SmartLedger.API.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var product = await _inventoryService.AdjustQuantityAsync(id, model.NewQuantity, model.Notes);
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            var product = await _inventoryService.AdjustQuantityAsync(id, model.NewQuantity, userId, model.Notes);
             if (product == null)
                 return NotFound(new { message = $"Product with ID {id} not found" });
 
@@ -274,11 +315,15 @@ namespace SmartLedger.API.Controllers
         [HttpGet("{id}/transactions")]
         public async Task<IActionResult> GetTransactionHistory(int id, [FromQuery] int days = 30)
         {
-            var product = await _inventoryService.GetProductByIdAsync(id);
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            var product = await _inventoryService.GetProductByIdAsync(id, userId);
             if (product == null)
                 return NotFound(new { message = $"Product with ID {id} not found" });
 
-            var transactions = await _inventoryService.GetTransactionHistoryAsync(id, days);
+            var transactions = await _inventoryService.GetTransactionHistoryAsync(id, userId, days);
             var response = transactions.Select(t => new InventoryTransactionResponseDto
             {
                 Id = t.Id,
@@ -305,7 +350,11 @@ namespace SmartLedger.API.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteProduct(int id)
         {
-            var deleted = await _inventoryService.DeleteProductAsync(id);
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            var deleted = await _inventoryService.DeleteProductAsync(id, userId);
             if (!deleted)
                 return NotFound(new { message = $"Product with ID {id} not found" });
 

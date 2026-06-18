@@ -32,6 +32,26 @@ namespace SmartLedger.API.DTOs
     }
 
     /// <summary>
+    /// DTO for updating an account
+    /// </summary>
+    public class UpdateAccountDto
+    {
+        [StringLength(100, ErrorMessage = "Account name cannot exceed 100 characters")]
+        public string? Name { get; set; }
+
+        [RegularExpression("Asset|Liability|Equity|Income|Expense",
+            ErrorMessage = "Type must be Asset, Liability, Equity, Income, or Expense")]
+        public string? Type { get; set; }
+
+        [RegularExpression("DEBIT|CREDIT", ErrorMessage = "Normal side must be DEBIT or CREDIT")]
+        public string? NormalSide { get; set; }
+
+        public int? ParentAccountId { get; set; }
+
+        public bool? IsActive { get; set; }
+    }
+
+    /// <summary>
     /// DTO for account response
     /// </summary>
     public class AccountResponseDto

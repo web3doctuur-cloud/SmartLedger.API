@@ -29,7 +29,8 @@ builder.Services.AddCors(options =>
     {
         policy.AllowAnyOrigin()
               .AllowAnyMethod()
-              .AllowAnyHeader();
+              .AllowAnyHeader()
+              .WithExposedHeaders("Content-Disposition", "Content-Length", "Content-Type");
     });
 });
 
@@ -49,7 +50,16 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // IDENTITY & AUTHENTICATION
 // ============================================================
 
-builder.Services.AddIdentity<IdentityUser, IdentityRole>()
+builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
+{
+    // Keep registration friction low while still requiring a non-empty password.
+    options.Password.RequiredLength = 6;
+    options.Password.RequireDigit = false;
+    options.Password.RequireLowercase = false;
+    options.Password.RequireUppercase = false;
+    options.Password.RequireNonAlphanumeric = false;
+    options.User.RequireUniqueEmail = true;
+})
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
 
@@ -173,7 +183,7 @@ if (isProduction)
 }
 else // Development environment
 {
-    // In development, we don't auto-run migrations - let EF Core handle it
+    // In development, keep the schema aligned with migrations too.
     using (var scope = app.Services.CreateScope())
     {
         try
@@ -181,9 +191,8 @@ else // Development environment
             var services = scope.ServiceProvider;
             var dbContext = services.GetRequiredService<ApplicationDbContext>();
 
-            // Just check if tables exist, create if needed
-            await dbContext.Database.EnsureCreatedAsync();
-            Console.WriteLine("Development database ensured.");
+            await dbContext.Database.MigrateAsync();
+            Console.WriteLine("Development database migrated.");
 
             // Still need roles for local testing
             var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();

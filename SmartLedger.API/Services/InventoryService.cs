@@ -19,37 +19,39 @@ namespace SmartLedger.API.Services
         // PRODUCT MANAGEMENT
         // ============================================================
 
-        public async Task<Product?> GetProductByIdAsync(int id)
-        {
-            return await _context.Products.FindAsync(id);
-        }
-
-        public async Task<IEnumerable<Product>> GetAllProductsAsync()
+        public async Task<Product?> GetProductByIdAsync(int id, string userId)
         {
             return await _context.Products
-                .Where(p => p.IsActive)
+                .FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId && p.IsActive);
+        }
+
+        public async Task<IEnumerable<Product>> GetAllProductsAsync(string userId)
+        {
+            return await _context.Products
+                .Where(p => p.IsActive && p.UserId == userId)
                 .OrderBy(p => p.Name)
                 .ToListAsync();
         }
 
-        public async Task<IEnumerable<Product>> GetProductsByCategoryAsync(string category)
+        public async Task<IEnumerable<Product>> GetProductsByCategoryAsync(string category, string userId)
         {
             return await _context.Products
-                .Where(p => p.Category == category && p.IsActive)
+                .Where(p => p.Category == category && p.IsActive && p.UserId == userId)
                 .OrderBy(p => p.Name)
                 .ToListAsync();
         }
 
-        public async Task<IEnumerable<Product>> GetLowStockProductsAsync(int threshold = 10)
+        public async Task<IEnumerable<Product>> GetLowStockProductsAsync(string userId, int threshold = 10)
         {
             return await _context.Products
-                .Where(p => p.IsActive && p.Quantity <= threshold)
+                .Where(p => p.IsActive && p.Quantity <= threshold && p.UserId == userId)
                 .OrderBy(p => p.Quantity)
                 .ToListAsync();
         }
 
-        public async Task<Product> CreateProductAsync(Product product)
+        public async Task<Product> CreateProductAsync(Product product, string userId)
         {
+            product.UserId = userId;
             product.CreatedAt = DateTime.UtcNow;
             product.IsActive = true;
 
@@ -59,7 +61,7 @@ namespace SmartLedger.API.Services
             // Create initial inventory transaction
             if (product.Quantity > 0)
             {
-                await RecordTransactionAsync(product.Id, "PURCHASE", product.Quantity, 0, product.Quantity,
+                await RecordTransactionAsync(product.Id, userId, "PURCHASE", product.Quantity, 0, product.Quantity,
                     $"Initial stock added: {product.Quantity} units", product.CostPrice);
             }
 
@@ -67,9 +69,10 @@ namespace SmartLedger.API.Services
             return product;
         }
 
-        public async Task<Product?> UpdateProductAsync(int id, Product product)
+        public async Task<Product?> UpdateProductAsync(int id, Product product, string userId)
         {
-            var existingProduct = await _context.Products.FindAsync(id);
+            var existingProduct = await _context.Products
+                .FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId);
             if (existingProduct == null) return null;
 
             // Store old values for logging
@@ -99,9 +102,10 @@ namespace SmartLedger.API.Services
             return existingProduct;
         }
 
-        public async Task<bool> DeleteProductAsync(int id)
+        public async Task<bool> DeleteProductAsync(int id, string userId)
         {
-            var product = await _context.Products.FindAsync(id);
+            var product = await _context.Products
+                .FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId);
             if (product == null) return false;
 
             // Soft delete
@@ -118,17 +122,18 @@ namespace SmartLedger.API.Services
         // QUANTITY MANAGEMENT
         // ============================================================
 
-        public async Task<Product?> IncreaseQuantityAsync(int id, int quantity, string? notes = null, decimal? unitPrice = null)
+        public async Task<Product?> IncreaseQuantityAsync(int id, int quantity, string userId, string? notes = null, decimal? unitPrice = null)
         {
             if (quantity <= 0) throw new ArgumentException("Quantity must be positive");
 
-            var product = await _context.Products.FindAsync(id);
+            var product = await _context.Products
+                .FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId);
             if (product == null) return null;
 
             var oldQuantity = product.Quantity;
             var newQuantity = oldQuantity + quantity;
 
-            await RecordTransactionAsync(id, "PURCHASE", quantity, oldQuantity, newQuantity, notes, unitPrice ?? product.CostPrice);
+            await RecordTransactionAsync(id, userId, "PURCHASE", quantity, oldQuantity, newQuantity, notes, unitPrice ?? product.CostPrice);
 
             product.Quantity = newQuantity;
             product.UpdatedAt = DateTime.UtcNow;
@@ -139,11 +144,12 @@ namespace SmartLedger.API.Services
             return product;
         }
 
-        public async Task<Product?> DecreaseQuantityAsync(int id, int quantity, string? notes = null, decimal? unitPrice = null)
+        public async Task<Product?> DecreaseQuantityAsync(int id, int quantity, string userId, string? notes = null, decimal? unitPrice = null)
         {
             if (quantity <= 0) throw new ArgumentException("Quantity must be positive");
 
-            var product = await _context.Products.FindAsync(id);
+            var product = await _context.Products
+                .FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId);
             if (product == null) return null;
 
             if (product.Quantity < quantity)
@@ -152,7 +158,7 @@ namespace SmartLedger.API.Services
             var oldQuantity = product.Quantity;
             var newQuantity = oldQuantity - quantity;
 
-            await RecordTransactionAsync(id, "SALE", -quantity, oldQuantity, newQuantity, notes, unitPrice ?? product.SellingPrice);
+            await RecordTransactionAsync(id, userId, "SALE", -quantity, oldQuantity, newQuantity, notes, unitPrice ?? product.SellingPrice);
 
             product.Quantity = newQuantity;
             product.UpdatedAt = DateTime.UtcNow;
@@ -168,17 +174,18 @@ namespace SmartLedger.API.Services
             return product;
         }
 
-        public async Task<Product?> AdjustQuantityAsync(int id, int newQuantity, string? notes = null)
+        public async Task<Product?> AdjustQuantityAsync(int id, int newQuantity, string userId, string? notes = null)
         {
             if (newQuantity < 0) throw new ArgumentException("Quantity cannot be negative");
 
-            var product = await _context.Products.FindAsync(id);
+            var product = await _context.Products
+                .FirstOrDefaultAsync(p => p.Id == id && p.UserId == userId);
             if (product == null) return null;
 
             var oldQuantity = product.Quantity;
             var quantityChange = newQuantity - oldQuantity;
 
-            await RecordTransactionAsync(id, "ADJUSTMENT", quantityChange, oldQuantity, newQuantity, notes, null);
+            await RecordTransactionAsync(id, userId, "ADJUSTMENT", quantityChange, oldQuantity, newQuantity, notes, null);
 
             product.Quantity = newQuantity;
             product.UpdatedAt = DateTime.UtcNow;
@@ -193,33 +200,33 @@ namespace SmartLedger.API.Services
         // CALCULATIONS
         // ============================================================
 
-        public async Task<decimal> GetTotalInventoryValueAsync()
+        public async Task<decimal> GetTotalInventoryValueAsync(string userId)
         {
             return await _context.Products
-                .Where(p => p.IsActive)
+                .Where(p => p.IsActive && p.UserId == userId)
                 .SumAsync(p => p.TotalCost);
         }
 
-        public async Task<decimal> GetTotalExpectedRevenueAsync()
+        public async Task<decimal> GetTotalExpectedRevenueAsync(string userId)
         {
             return await _context.Products
-                .Where(p => p.IsActive)
+                .Where(p => p.IsActive && p.UserId == userId)
                 .SumAsync(p => p.ExpectedRevenue);
         }
 
-        public async Task<decimal> GetTotalPotentialProfitAsync()
+        public async Task<decimal> GetTotalPotentialProfitAsync(string userId)
         {
             var products = await _context.Products
-                .Where(p => p.IsActive)
+                .Where(p => p.IsActive && p.UserId == userId)
                 .ToListAsync();
 
             return products.Sum(p => p.PotentialProfit);
         }
 
-        public async Task<Dictionary<string, decimal>> GetInventoryValueByCategoryAsync()
+        public async Task<Dictionary<string, decimal>> GetInventoryValueByCategoryAsync(string userId)
         {
             return await _context.Products
-                .Where(p => p.IsActive && p.Category != null)
+                .Where(p => p.IsActive && p.Category != null && p.UserId == userId)
                 .GroupBy(p => p.Category!)
                 .Select(g => new
                 {
@@ -233,12 +240,13 @@ namespace SmartLedger.API.Services
         // TRANSACTION HISTORY
         // ============================================================
 
-        public async Task<IEnumerable<InventoryTransaction>> GetTransactionHistoryAsync(int productId, int days = 30)
+        public async Task<IEnumerable<InventoryTransaction>> GetTransactionHistoryAsync(int productId, string userId, int days = 30)
         {
             var cutoffDate = DateTime.UtcNow.AddDays(-days);
 
             return await _context.InventoryTransactions
-                .Where(t => t.ProductId == productId && t.CreatedAt >= cutoffDate)
+                .Include(t => t.Product)
+                .Where(t => t.ProductId == productId && t.UserId == userId && t.CreatedAt >= cutoffDate)
                 .OrderByDescending(t => t.CreatedAt)
                 .ToListAsync();
         }
@@ -249,6 +257,7 @@ namespace SmartLedger.API.Services
 
         private async Task RecordTransactionAsync(
             int productId,
+            string userId,
             string transactionType,
             int quantityChange,
             int previousQuantity,
@@ -265,6 +274,7 @@ namespace SmartLedger.API.Services
                 NewQuantity = newQuantity,
                 Notes = notes,
                 UnitPrice = unitPrice,
+                UserId = userId,
                 CreatedAt = DateTime.UtcNow,
                 IsActive = true
             };

@@ -32,9 +32,28 @@ namespace SmartLedger.API.Data
                 .Property(p => p.SellingPrice)
                 .HasColumnType("decimal(18,2)");
 
+            builder.Entity<Account>()
+                .Property(a => a.Balance)
+                .HasColumnType("decimal(18,2)");
+
             builder.Entity<InventoryTransaction>()
                 .Property(t => t.UnitPrice)
                 .HasColumnType("decimal(18,2)");
+
+            builder.Entity<Account>()
+                .HasIndex(a => a.UserId);
+
+            builder.Entity<Product>()
+                .HasIndex(p => p.UserId);
+
+            builder.Entity<InventoryTransaction>()
+                .HasIndex(t => t.UserId);
+
+            builder.Entity<JournalEntry>()
+                .HasIndex(j => j.UserId);
+
+            builder.Entity<TodoItem>()
+                .HasIndex(t => t.UserId);
         }
     }
 }

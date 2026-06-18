@@ -20,21 +20,23 @@ namespace SmartLedger.API.Services
         // ACCOUNT MANAGEMENT
         // ============================================================
 
-        public async Task<Account?> GetAccountByIdAsync(int id)
-        {
-            return await _context.Accounts.FindAsync(id);
-        }
-
-        public async Task<IEnumerable<Account>> GetAllAccountsAsync()
+        public async Task<Account?> GetAccountByIdAsync(int id, string userId)
         {
             return await _context.Accounts
-                .Where(a => a.IsActive)
+                .FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId && a.IsActive);
+        }
+
+        public async Task<IEnumerable<Account>> GetAllAccountsAsync(string userId)
+        {
+            return await _context.Accounts
+                .Where(a => a.IsActive && a.UserId == userId)
                 .OrderBy(a => a.AccountCode)
                 .ToListAsync();
         }
 
-        public async Task<Account> CreateAccountAsync(Account account)
+        public async Task<Account> CreateAccountAsync(Account account, string userId)
         {
+            account.UserId = userId;
             account.CreatedAt = DateTime.UtcNow;
             account.IsActive = true;
 
@@ -45,36 +47,31 @@ namespace SmartLedger.API.Services
             return account;
         }
 
-        public async Task<Account?> UpdateAccountAsync(int id, Account account)
+        public async Task<Account?> UpdateAccountAsync(int id, Account account, string userId)
         {
-            var existingAccount = await _context.Accounts.FindAsync(id);
+            var existingAccount = await _context.Accounts
+                .FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId);
             if (existingAccount == null) return null;
 
             existingAccount.Name = account.Name;
             existingAccount.Type = account.Type;
             existingAccount.NormalSide = account.NormalSide;
             existingAccount.ParentAccountId = account.ParentAccountId;
+            existingAccount.IsActive = account.IsActive;
             existingAccount.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
             return existingAccount;
         }
 
-        public async Task<bool> DeleteAccountAsync(int id)
+        public async Task<bool> DeleteAccountAsync(int id, string userId)
         {
-            var account = await _context.Accounts.FindAsync(id);
+            var account = await _context.Accounts
+                .FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId);
             if (account == null) return false;
 
-            // Check if account has transactions
-            var hasTransactions = await _context.JournalEntryLines
-                .AnyAsync(l => l.AccountId == id);
-
-            if (hasTransactions)
-            {
-                throw new InvalidOperationException("Cannot delete account with existing transactions");
-            }
-
             account.IsActive = false;
+            account.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
             return true;
         }
@@ -83,7 +80,7 @@ namespace SmartLedger.API.Services
         // JOURNAL ENTRIES
         // ============================================================
 
-        public async Task<JournalEntry> CreateJournalEntryAsync(JournalEntry entry, List<JournalEntryLine> lines)
+        public async Task<JournalEntry> CreateJournalEntryAsync(JournalEntry entry, List<JournalEntryLine> lines, string userId)
         {
             // Validate double-entry accounting
             if (!ValidateDoubleEntry(lines))
@@ -91,8 +88,18 @@ namespace SmartLedger.API.Services
                 throw new InvalidOperationException("Total debits must equal total credits");
             }
 
+            var accountIds = lines.Select(line => line.AccountId).Distinct().ToList();
+            var validAccountCount = await _context.Accounts
+                .CountAsync(a => accountIds.Contains(a.Id) && a.UserId == userId && a.IsActive);
+
+            if (validAccountCount != accountIds.Count)
+            {
+                throw new InvalidOperationException("One or more accounts do not belong to the current user");
+            }
+
             // Generate unique entry number
-            entry.EntryNumber = await GenerateEntryNumberAsync();
+            entry.EntryNumber = await GenerateEntryNumberAsync(userId);
+            entry.UserId = userId;
             entry.CreatedAt = DateTime.UtcNow;
             entry.IsActive = true;
 
@@ -114,10 +121,10 @@ namespace SmartLedger.API.Services
             return entry;
         }
 
-        public async Task<JournalEntryResponseDto?> GetJournalEntryByIdAsync(int id)
+        public async Task<JournalEntryResponseDto?> GetJournalEntryByIdAsync(int id, string userId)
         {
             var entry = await _context.JournalEntries
-                .FirstOrDefaultAsync(j => j.Id == id);
+                .FirstOrDefaultAsync(j => j.Id == id && j.UserId == userId && j.IsActive);
 
             if (entry == null) return null;
 
@@ -152,12 +159,12 @@ namespace SmartLedger.API.Services
             };
         }
 
-        public async Task<IEnumerable<JournalEntryResponseDto>> GetAllJournalEntriesAsync(DateTime? fromDate = null, DateTime? toDate = null)
+        public async Task<IEnumerable<JournalEntryResponseDto>> GetAllJournalEntriesAsync(string userId, DateTime? fromDate = null, DateTime? toDate = null)
         {
             try
             {
                 var query = _context.JournalEntries
-                    .Where(j => j.IsActive);
+                    .Where(j => j.IsActive && j.UserId == userId);
 
                 if (fromDate.HasValue)
                     query = query.Where(j => j.EntryDate >= fromDate.Value);
@@ -211,9 +218,10 @@ namespace SmartLedger.API.Services
                 throw;
             }
         }
-        public async Task<bool> ApproveJournalEntryAsync(int id)
+        public async Task<bool> ApproveJournalEntryAsync(int id, string userId)
         {
-            var entry = await _context.JournalEntries.FindAsync(id);
+            var entry = await _context.JournalEntries
+                .FirstOrDefaultAsync(j => j.Id == id && j.UserId == userId && j.IsActive);
             if (entry == null) return false;
 
             entry.IsApproved = true;
@@ -224,12 +232,14 @@ namespace SmartLedger.API.Services
             return true;
         }
 
-        public async Task<bool> DeleteJournalEntryAsync(int id)
+        public async Task<bool> DeleteJournalEntryAsync(int id, string userId)
         {
-            var entry = await _context.JournalEntries.FindAsync(id);
+            var entry = await _context.JournalEntries
+                .FirstOrDefaultAsync(j => j.Id == id && j.UserId == userId);
             if (entry == null) return false;
 
             entry.IsActive = false;
+            entry.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
             return true;
         }
@@ -262,14 +272,18 @@ namespace SmartLedger.API.Services
         // REPORTS
         // ============================================================
 
-        public async Task<decimal> GetAccountBalanceAsync(int accountId)
+        public async Task<decimal> GetAccountBalanceAsync(int accountId, string userId, DateTime? asOfDate = null)
         {
             var lines = await _context.JournalEntryLines
                 .Include(l => l.JournalEntry)
-                .Where(l => l.AccountId == accountId && l.JournalEntry!.IsApproved)
+                .Where(l => l.AccountId == accountId
+                    && l.JournalEntry!.IsApproved
+                    && l.JournalEntry!.UserId == userId
+                    && (!asOfDate.HasValue || l.JournalEntry.EntryDate <= asOfDate.Value))
                 .ToListAsync();
 
-            var account = await _context.Accounts.FindAsync(accountId);
+            var account = await _context.Accounts
+                .FirstOrDefaultAsync(a => a.Id == accountId && a.UserId == userId);
             if (account == null) return 0;
 
             var totalDebits = lines.Sum(l => l.Debit);
@@ -280,17 +294,17 @@ namespace SmartLedger.API.Services
                 : totalCredits - totalDebits;
         }
 
-        public async Task<Dictionary<string, decimal>> GetTrialBalanceAsync()
+        public async Task<Dictionary<string, decimal>> GetTrialBalanceAsync(string userId, DateTime? asOfDate = null)
         {
             var accounts = await _context.Accounts
-                .Where(a => a.IsActive)
+                .Where(a => a.IsActive && a.UserId == userId)
                 .ToListAsync();
 
             var trialBalance = new Dictionary<string, decimal>();
 
             foreach (var account in accounts)
             {
-                var balance = await GetAccountBalanceAsync(account.Id);
+                var balance = await GetAccountBalanceAsync(account.Id, userId, asOfDate);
                 if (balance != 0)
                 {
                     trialBalance.Add($"{account.AccountCode} - {account.Name}", balance);
@@ -300,13 +314,13 @@ namespace SmartLedger.API.Services
             return trialBalance;
         }
 
-        public async Task<(decimal Income, decimal Expenses, decimal NetProfit)> GetProfitLossAsync(DateTime startDate, DateTime endDate)
+        public async Task<(decimal Income, decimal Expenses, decimal NetProfit)> GetProfitLossAsync(DateTime startDate, DateTime endDate, string userId)
         {
             // Get all journal entries in date range
             var entries = await _context.JournalEntries
                 .Include(j => j.Lines!)
                 .ThenInclude(l => l.Account)
-                .Where(j => j.EntryDate >= startDate && j.EntryDate <= endDate && j.IsApproved)
+                .Where(j => j.EntryDate >= startDate && j.EntryDate <= endDate && j.IsApproved && j.UserId == userId)
                 .ToListAsync();
 
             decimal income = 0;
@@ -335,9 +349,10 @@ namespace SmartLedger.API.Services
         // PRIVATE HELPERS
         // ============================================================
 
-        private async Task<string> GenerateEntryNumberAsync()
+        private async Task<string> GenerateEntryNumberAsync(string userId)
         {
             var lastEntry = await _context.JournalEntries
+                .Where(j => j.UserId == userId)
                 .OrderByDescending(j => j.Id)
                 .FirstOrDefaultAsync();
 

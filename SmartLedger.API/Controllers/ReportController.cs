@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartLedger.API.Data;
+using SmartLedger.API.Extensions;
 using SmartLedger.API.Services;
 
 namespace SmartLedger.API.Controllers
@@ -32,23 +33,28 @@ namespace SmartLedger.API.Controllers
         // INCOME STATEMENT (Profit & Loss)
         // ============================================================
         [HttpGet("income-statement")]
+        [HttpGet("profit-loss")]
         public async Task<IActionResult> GetIncomeStatement(
             [FromQuery] DateTime? startDate,
             [FromQuery] DateTime? endDate)
         {
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
             // Default to current month if no dates provided
             if (!startDate.HasValue)
                 startDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
             if (!endDate.HasValue)
                 endDate = DateTime.UtcNow;
 
-            var (income, expenses, netProfit) = await _ledgerService.GetProfitLossAsync(startDate.Value, endDate.Value);
+            var (income, expenses, netProfit) = await _ledgerService.GetProfitLossAsync(startDate.Value, endDate.Value, userId);
 
             // Get detailed breakdowns
             var incomeAccounts = await _context.JournalEntries
                 .Include(j => j.Lines!)
                 .ThenInclude(l => l.Account)
-                .Where(j => j.EntryDate >= startDate && j.EntryDate <= endDate && j.IsApproved)
+                .Where(j => j.EntryDate >= startDate && j.EntryDate <= endDate && j.IsApproved && j.UserId == userId)
                 .SelectMany(j => j.Lines!)
                 .Where(l => l.Account!.Type == "Income")
                 .GroupBy(l => new { l.Account!.Id, l.Account!.Name, l.Account!.AccountCode })
@@ -64,7 +70,7 @@ namespace SmartLedger.API.Controllers
             var expenseAccounts = await _context.JournalEntries
                 .Include(j => j.Lines!)
                 .ThenInclude(l => l.Account)
-                .Where(j => j.EntryDate >= startDate && j.EntryDate <= endDate && j.IsApproved)
+                .Where(j => j.EntryDate >= startDate && j.EntryDate <= endDate && j.IsApproved && j.UserId == userId)
                 .SelectMany(j => j.Lines!)
                 .Where(l => l.Account!.Type == "Expense")
                 .GroupBy(l => new { l.Account!.Id, l.Account!.Name, l.Account!.AccountCode })
@@ -102,11 +108,15 @@ namespace SmartLedger.API.Controllers
         [HttpGet("balance-sheet")]
         public async Task<IActionResult> GetBalanceSheet([FromQuery] DateTime? asOfDate)
         {
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
             var date = asOfDate ?? DateTime.UtcNow;
 
             // Get all accounts with their balances
             var accounts = await _context.Accounts
-                .Where(a => a.IsActive)
+                .Where(a => a.IsActive && a.UserId == userId)
                 .ToListAsync();
 
             var assets = new List<object>();
@@ -119,7 +129,7 @@ namespace SmartLedger.API.Controllers
 
             foreach (var account in accounts)
             {
-                var balance = await _ledgerService.GetAccountBalanceAsync(account.Id);
+                var balance = await _ledgerService.GetAccountBalanceAsync(account.Id, userId, date);
 
                 if (balance != 0)
                 {
@@ -178,9 +188,13 @@ namespace SmartLedger.API.Controllers
         [HttpGet("trial-balance")]
         public async Task<IActionResult> GetTrialBalance([FromQuery] DateTime? asOfDate)
         {
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
             var date = asOfDate ?? DateTime.UtcNow;
 
-            var trialBalance = await _ledgerService.GetTrialBalanceAsync();
+            var trialBalance = await _ledgerService.GetTrialBalanceAsync(userId, date);
 
             var totalDebits = trialBalance.Values.Where(v => v > 0).Sum();
             var totalCredits = trialBalance.Values.Where(v => v < 0).Sum() * -1;
@@ -209,9 +223,13 @@ namespace SmartLedger.API.Controllers
         [HttpGet("inventory-summary")]
         public async Task<IActionResult> GetInventorySummary()
         {
-            var products = await _inventoryService.GetAllProductsAsync();
-            var byCategory = await _inventoryService.GetInventoryValueByCategoryAsync();
-            var lowStock = await _inventoryService.GetLowStockProductsAsync();
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            var products = await _inventoryService.GetAllProductsAsync(userId);
+            var byCategory = await _inventoryService.GetInventoryValueByCategoryAsync(userId);
+            var lowStock = await _inventoryService.GetLowStockProductsAsync(userId);
 
             return Ok(new
             {
@@ -261,7 +279,11 @@ namespace SmartLedger.API.Controllers
         public async Task<IActionResult> GetInventoryValuation(
             [FromQuery] string method = "FIFO") // FIFO, LIFO, WeightedAverage
         {
-            var products = await _inventoryService.GetAllProductsAsync();
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
+            var products = await _inventoryService.GetAllProductsAsync(userId);
 
             var valuation = new List<object>();
 
@@ -269,7 +291,7 @@ namespace SmartLedger.API.Controllers
             {
                 // Get all purchase transactions for this product
                 var purchases = await _context.InventoryTransactions
-                    .Where(t => t.ProductId == product.Id && t.TransactionType == "PURCHASE")
+                    .Where(t => t.ProductId == product.Id && t.TransactionType == "PURCHASE" && t.UserId == userId)
                     .OrderBy(t => t.CreatedAt)
                     .ToListAsync();
 
@@ -338,6 +360,10 @@ namespace SmartLedger.API.Controllers
             [FromQuery] DateTime? startDate,
             [FromQuery] DateTime? endDate)
         {
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
             if (!startDate.HasValue)
                 startDate = DateTime.UtcNow.AddDays(-30);
             if (!endDate.HasValue)
@@ -346,6 +372,7 @@ namespace SmartLedger.API.Controllers
             var sales = await _context.InventoryTransactions
                 .Include(t => t.Product)
                 .Where(t => t.TransactionType == "SALE"
+                    && t.UserId == userId
                     && t.CreatedAt >= startDate
                     && t.CreatedAt <= endDate)
                 .ToListAsync();
@@ -397,6 +424,10 @@ namespace SmartLedger.API.Controllers
             [FromQuery] DateTime? endDate,
             [FromQuery] string? category)
         {
+            var userId = User.GetSmartLedgerUserId();
+            if (string.IsNullOrWhiteSpace(userId))
+                return Unauthorized();
+
             if (!startDate.HasValue)
                 startDate = DateTime.UtcNow.AddDays(-30);
             if (!endDate.HasValue)
@@ -407,7 +438,8 @@ namespace SmartLedger.API.Controllers
                 .ThenInclude(l => l.Account)
                 .Where(j => j.EntryDate >= startDate
                     && j.EntryDate <= endDate
-                    && j.IsApproved)
+                    && j.IsApproved
+                    && j.UserId == userId)
                 .SelectMany(j => j.Lines!)
                 .Where(l => l.Account!.Type == "Expense");
 

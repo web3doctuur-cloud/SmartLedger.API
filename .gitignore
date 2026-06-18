@@ -9,6 +9,7 @@ secrets.json
 .env.*
 !.env.example
 .vs/
+.tmp/
 .vscode/
 .idea/
 *.user
