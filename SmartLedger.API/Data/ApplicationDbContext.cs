@@ -40,6 +40,18 @@ namespace SmartLedger.API.Data
                 .Property(t => t.UnitPrice)
                 .HasColumnType("decimal(18,2)");
 
+            builder.Entity<JournalEntryLine>()
+                .Property(l => l.Debit)
+                .HasColumnType("decimal(18,2)");
+
+            builder.Entity<JournalEntryLine>()
+                .Property(l => l.Credit)
+                .HasColumnType("decimal(18,2)");
+
+            builder.Entity<JournalEntryLine>()
+                .Property(l => l.TaxAmount)
+                .HasColumnType("decimal(18,2)");
+
             // 🔧 FIX: Add UserId indexes and relationships
             builder.Entity<Product>()
                 .HasIndex(p => p.UserId)

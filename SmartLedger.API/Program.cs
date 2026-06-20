@@ -120,19 +120,20 @@ var app = builder.Build();
 // MIDDLEWARE PIPELINE (CORRECT ORDER!)
 // ============================================================
 
-app.UseSwagger();
-app.UseSwaggerUI(c =>
-{
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "SmartLedger API v1");
-    c.RoutePrefix = "swagger";
-});
-
 // CORS FIRST!
 app.UseCors("AllowAll");
 
 // Authentication before Authorization
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Swagger after Authorization (so you can use it with auth if needed)
+app.UseSwagger();
+app.UseSwaggerUI(c =>
+{
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "SmartLedger API v1");
+    c.RoutePrefix = "swagger";
+});
 
 app.MapControllers();
 
