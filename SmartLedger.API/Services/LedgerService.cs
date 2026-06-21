@@ -82,38 +82,63 @@ namespace SmartLedger.API.Services
 
         public async Task<JournalEntry> CreateJournalEntryAsync(JournalEntry entry, List<JournalEntryLine> lines, string userId)
         {
-            // Note: Double-entry validation is disabled per user request
-            var accountIds = lines.Select(line => line.AccountId).Distinct().ToList();
-            var validAccountCount = await _context.Accounts
-                .CountAsync(a => accountIds.Contains(a.Id) && a.UserId == userId && a.IsActive);
-
-            if (validAccountCount != accountIds.Count)
+            try
             {
-                throw new InvalidOperationException("One or more accounts do not belong to the current user");
+                _logger.LogInformation("CreateJournalEntryAsync starting for user {UserId}", userId);
+                _logger.LogInformation("Entry data: EntryDate={EntryDate}, Description={Description}", entry.EntryDate, entry.Description);
+                _logger.LogInformation("Number of lines: {LineCount}", lines.Count);
+
+                // Note: Double-entry validation is disabled per user request
+                var accountIds = lines.Select(line => line.AccountId).Distinct().ToList();
+                _logger.LogInformation("Account IDs: {AccountIds}", string.Join(", ", accountIds));
+                
+                var validAccountCount = await _context.Accounts
+                    .CountAsync(a => accountIds.Contains(a.Id) && a.UserId == userId && a.IsActive);
+                _logger.LogInformation("Valid accounts found: {ValidAccountCount} out of {TotalAccountCount}", validAccountCount, accountIds.Count);
+
+                if (validAccountCount != accountIds.Count)
+                {
+                    throw new InvalidOperationException("One or more accounts do not belong to the current user");
+                }
+
+                // Generate unique entry number
+                _logger.LogInformation("Generating entry number...");
+                entry.EntryNumber = await GenerateEntryNumberAsync(userId);
+                _logger.LogInformation("Generated entry number: {EntryNumber}", entry.EntryNumber);
+                
+                entry.UserId = userId;
+                entry.CreatedAt = DateTime.UtcNow;
+                entry.IsActive = true;
+
+                _logger.LogInformation("Adding journal entry to context...");
+                _context.JournalEntries.Add(entry);
+                _logger.LogInformation("Saving changes for entry...");
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Journal entry saved, ID: {EntryId}", entry.Id);
+
+                // Add lines with reference to entry
+                _logger.LogInformation("Adding {LineCount} lines...", lines.Count);
+                foreach (var line in lines)
+                {
+                    line.JournalEntryId = entry.Id;
+                    line.CreatedAt = DateTime.UtcNow;
+                    line.IsActive = true;
+                    _logger.LogInformation("Adding line: AccountId={AccountId}, Debit={Debit}, Credit={Credit}", line.AccountId, line.Debit, line.Credit);
+                    _context.JournalEntryLines.Add(line);
+                }
+
+                _logger.LogInformation("Saving changes for lines...");
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("All lines saved");
+
+                _logger.LogInformation($"Journal entry created: {entry.EntryNumber} (ID: {entry.Id})");
+                return entry;
             }
-
-            // Generate unique entry number
-            entry.EntryNumber = await GenerateEntryNumberAsync(userId);
-            entry.UserId = userId;
-            entry.CreatedAt = DateTime.UtcNow;
-            entry.IsActive = true;
-
-            _context.JournalEntries.Add(entry);
-            await _context.SaveChangesAsync();
-
-            // Add lines with reference to entry
-            foreach (var line in lines)
+            catch (Exception ex)
             {
-                line.JournalEntryId = entry.Id;
-                line.CreatedAt = DateTime.UtcNow;
-                line.IsActive = true;
-                _context.JournalEntryLines.Add(line);
+                _logger.LogError(ex, "Error creating journal entry: {Message}", ex.Message);
+                throw;
             }
-
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation($"Journal entry created: {entry.EntryNumber} (ID: {entry.Id})");
-            return entry;
         }
 
         public async Task<JournalEntryResponseDto?> GetJournalEntryByIdAsync(int id, string userId)

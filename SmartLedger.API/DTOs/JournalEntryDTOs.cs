@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace SmartLedger.API.DTOs
 {
@@ -40,7 +40,7 @@ namespace SmartLedger.API.DTOs
         public string Description { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "At least one journal entry line is required")]
-        [MinLength(2, ErrorMessage = "A journal entry must have at least 2 lines")]
+        [MinLength(1, ErrorMessage = "A journal entry must have at least 1 line")]
         public List<JournalEntryLineDto> Lines { get; set; } = new();
     }
 

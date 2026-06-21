@@ -78,14 +78,22 @@ namespace SmartLedger.API.Controllers
         [HttpPost]
         public async Task<IActionResult> CreateEntry([FromBody] CreateJournalEntryDto entryDto)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
-
             try
             {
+                _logger.LogInformation("CreateEntry called with payload: {@EntryDto}", entryDto);
+
+                if (!ModelState.IsValid)
+                {
+                    _logger.LogError("Model state invalid: {@ModelState}", ModelState);
+                    return BadRequest(ModelState);
+                }
+
                 var userId = User.GetSmartLedgerUserId();
                 if (string.IsNullOrWhiteSpace(userId))
+                {
+                    _logger.LogWarning("Unauthorized request");
                     return Unauthorized();
+                }
 
                 _logger.LogInformation($"Creating journal entry for user: {userId}, Description: {entryDto.Description}");
 
@@ -129,8 +137,8 @@ namespace SmartLedger.API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creating journal entry");
-                return StatusCode(500, new { message = "Error creating journal entry", details = ex.Message });
+                _logger.LogError(ex, "Error creating journal entry: {Message}", ex.Message);
+                return StatusCode(500, new { message = "Error creating journal entry", details = ex.Message, stackTrace = ex.StackTrace });
             }
         }
 
