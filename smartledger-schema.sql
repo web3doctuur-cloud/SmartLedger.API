@@ -1,5 +1,6 @@
 
 -- SmartLedger Complete Database Schema for PostgreSQL/Neon
+-- Perfect for copy-paste into Neon SQL Editor
 -- Generated from ApplicationDbContext and Models
 -- Includes all Identity tables and custom application tables
 
@@ -130,11 +131,11 @@ CREATE TABLE "JournalEntryLines" (
     "Id" SERIAL NOT NULL,
     "JournalEntryId" INTEGER NOT NULL,
     "AccountId" INTEGER NOT NULL,
-    "Debit" NUMERIC NOT NULL DEFAULT 0,
-    "Credit" NUMERIC NOT NULL DEFAULT 0,
+    "Debit" NUMERIC(18,2) NOT NULL DEFAULT 0,
+    "Credit" NUMERIC(18,2) NOT NULL DEFAULT 0,
     "LineDescription" VARCHAR(500),
     "ReferenceNumber" VARCHAR(50),
-    "TaxAmount" NUMERIC NOT NULL DEFAULT 0,
+    "TaxAmount" NUMERIC(18,2) NOT NULL DEFAULT 0,
     "CreatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "UpdatedAt" TIMESTAMP WITH TIME ZONE,
     "IsActive" BOOLEAN NOT NULL DEFAULT TRUE,
@@ -227,45 +228,9 @@ CREATE UNIQUE INDEX "RoleNameIndex" ON "AspNetRoles" ("NormalizedName");
 -- SEED INITIAL DATA
 -- =============================================
 
--- Seed Admin and User Roles
+-- Seed User Role (only role in the system)
 INSERT INTO "AspNetRoles" ("Id", "Name", "NormalizedName", "ConcurrencyStamp")
 VALUES 
-    ('user-role-id', 'User', 'USER', 'user-role-concurrency-stamp'),
-    ('admin-role-id', 'Admin', 'ADMIN', 'admin-role-concurrency-stamp');
-
--- Seed Default Chart of Accounts (optional, user-facing)
--- Users can customize, but these are good defaults
-INSERT INTO "Accounts" ("Id", "AccountCode", "Name", "Type", "NormalSide", "UserId", "IsActive")
-SELECT 
-    1, '1000', 'Cash', 'Asset', 'DEBIT', u."Id", TRUE
-FROM "AspNetUsers" u
-LIMIT 1
+    ('user-role-id', 'User', 'USER', 'user-role-concurrency-stamp')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO "Accounts" ("Id", "AccountCode", "Name", "Type", "NormalSide", "UserId", "IsActive")
-SELECT 
-    2, '2000', 'Accounts Payable', 'Liability', 'CREDIT', u."Id", TRUE
-FROM "AspNetUsers" u
-LIMIT 1
-ON CONFLICT DO NOTHING;
-
-INSERT INTO "Accounts" ("Id", "AccountCode", "Name", "Type", "NormalSide", "UserId", "IsActive")
-SELECT 
-    3, '3000', 'Owner''s Equity', 'Equity', 'CREDIT', u."Id", TRUE
-FROM "AspNetUsers" u
-LIMIT 1
-ON CONFLICT DO NOTHING;
-
-INSERT INTO "Accounts" ("Id", "AccountCode", "Name", "Type", "NormalSide", "UserId", "IsActive")
-SELECT 
-    4, '4000', 'Sales Revenue', 'Income', 'CREDIT', u."Id", TRUE
-FROM "AspNetUsers" u
-LIMIT 1
-ON CONFLICT DO NOTHING;
-
-INSERT INTO "Accounts" ("Id", "AccountCode", "Name", "Type", "NormalSide", "UserId", "IsActive")
-SELECT 
-    5, '5000', 'Cost of Goods Sold', 'Expense', 'DEBIT', u."Id", TRUE
-FROM "AspNetUsers" u
-LIMIT 1
-ON CONFLICT DO NOTHING;

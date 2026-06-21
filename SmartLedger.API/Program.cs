@@ -22,12 +22,22 @@ builder.WebHost.ConfigureKestrel(serverOptions =>
     serverOptions.ListenAnyIP(int.Parse(port));
 });
 
-// CORS CONFIGURATION - Allow all origins for quick testing
+// CORS CONFIGURATION
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
+    // Development: Allow all origins for local testing
+    options.AddPolicy("AllowDevelopment", policy =>
     {
         policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .WithExposedHeaders("Content-Disposition", "Content-Length", "Content-Type");
+    });
+    
+    // Production: Allow only specific frontend origin
+    options.AddPolicy("AllowProduction", policy =>
+    {
+        policy.WithOrigins("https://smart-ledger-frontend.vercel.app", "http://localhost:3000")
               .AllowAnyMethod()
               .AllowAnyHeader()
               .WithExposedHeaders("Content-Disposition", "Content-Length", "Content-Type");
@@ -121,7 +131,7 @@ var app = builder.Build();
 // ============================================================
 
 // CORS FIRST!
-app.UseCors("AllowAll");
+app.UseCors(isProduction ? "AllowProduction" : "AllowDevelopment");
 
 // Authentication before Authorization
 app.UseAuthentication();
