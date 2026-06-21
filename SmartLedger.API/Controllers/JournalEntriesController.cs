@@ -13,10 +13,12 @@ namespace SmartLedger.API.Controllers
     public class JournalEntriesController : ControllerBase
     {
         private readonly ILedgerService _ledgerService;
+        private readonly ILogger<JournalEntriesController> _logger;
 
-        public JournalEntriesController(ILedgerService ledgerService)
+        public JournalEntriesController(ILedgerService ledgerService, ILogger<JournalEntriesController> logger)
         {
             _ledgerService = ledgerService;
+            _logger = logger;
         }
 
         // ============================================================
@@ -26,12 +28,22 @@ namespace SmartLedger.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAllEntries()
         {
-            var userId = User.GetSmartLedgerUserId();
-            if (string.IsNullOrWhiteSpace(userId))
-                return Unauthorized();
+            try
+            {
+                var userId = User.GetSmartLedgerUserId();
+                if (string.IsNullOrWhiteSpace(userId))
+                    return Unauthorized();
 
-            var entries = await _ledgerService.GetAllJournalEntriesAsync(userId);
-            return Ok(entries);
+                _logger.LogInformation($"Getting all journal entries for user: {userId}");
+                var entries = await _ledgerService.GetAllJournalEntriesAsync(userId);
+                _logger.LogInformation($"Found {entries.Count()} journal entries");
+                return Ok(entries);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting all journal entries");
+                return StatusCode(500, new { message = "Error getting journal entries", details = ex.Message });
+            }
         }
 
         // ============================================================
@@ -41,14 +53,22 @@ namespace SmartLedger.API.Controllers
         [HttpGet("{id}")]
         public async Task<IActionResult> GetEntryById(int id)
         {
-            var userId = User.GetSmartLedgerUserId();
-            if (string.IsNullOrWhiteSpace(userId))
-                return Unauthorized();
+            try
+            {
+                var userId = User.GetSmartLedgerUserId();
+                if (string.IsNullOrWhiteSpace(userId))
+                    return Unauthorized();
 
-            var entry = await _ledgerService.GetJournalEntryByIdAsync(id, userId);
-            if (entry == null)
-                return NotFound(new { message = $"Journal entry with ID {id} not found" });
-            return Ok(entry);
+                var entry = await _ledgerService.GetJournalEntryByIdAsync(id, userId);
+                if (entry == null)
+                    return NotFound(new { message = $"Journal entry with ID {id} not found" });
+                return Ok(entry);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error getting journal entry with ID {id}");
+                return StatusCode(500, new { message = "Error getting journal entry", details = ex.Message });
+            }
         }
 
         // ============================================================
@@ -67,19 +87,7 @@ namespace SmartLedger.API.Controllers
                 if (string.IsNullOrWhiteSpace(userId))
                     return Unauthorized();
 
-                // Validate double-entry
-                var totalDebits = entryDto.Lines.Sum(l => l.Debit);
-                var totalCredits = entryDto.Lines.Sum(l => l.Credit);
-
-                if (totalDebits != totalCredits)
-                {
-                    return BadRequest(new
-                    {
-                        message = "Total debits must equal total credits in double-entry accounting",
-                        totalDebits = totalDebits,
-                        totalCredits = totalCredits
-                    });
-                }
+                _logger.LogInformation($"Creating journal entry for user: {userId}, Description: {entryDto.Description}");
 
                 // Convert DTO to entities
                 var entry = new JournalEntry
@@ -103,7 +111,11 @@ namespace SmartLedger.API.Controllers
                     IsActive = true
                 }).ToList();
 
+                _logger.LogInformation($"Creating journal entry with {lines.Count} lines");
                 var createdEntry = await _ledgerService.CreateJournalEntryAsync(entry, lines, userId);
+                
+                _logger.LogInformation($"Journal entry created with ID: {createdEntry.Id}");
+                
                 var response = await _ledgerService.GetJournalEntryByIdAsync(createdEntry.Id, userId);
                 if (response == null)
                     return StatusCode(500, new { message = "Journal entry was created but could not be reloaded" });
@@ -112,11 +124,13 @@ namespace SmartLedger.API.Controllers
             }
             catch (InvalidOperationException ex)
             {
+                _logger.LogError(ex, "Invalid operation creating journal entry");
                 return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { message = ex.Message });
+                _logger.LogError(ex, "Error creating journal entry");
+                return StatusCode(500, new { message = "Error creating journal entry", details = ex.Message });
             }
         }
 

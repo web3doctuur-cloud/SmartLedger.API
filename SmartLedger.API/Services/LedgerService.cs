@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using SmartLedger.API.Data;
 using SmartLedger.API.DTOs;
 using SmartLedger.API.Models;
@@ -82,12 +82,7 @@ namespace SmartLedger.API.Services
 
         public async Task<JournalEntry> CreateJournalEntryAsync(JournalEntry entry, List<JournalEntryLine> lines, string userId)
         {
-            // Validate double-entry accounting
-            if (!ValidateDoubleEntry(lines))
-            {
-                throw new InvalidOperationException("Total debits must equal total credits");
-            }
-
+            // Note: Double-entry validation is disabled per user request
             var accountIds = lines.Select(line => line.AccountId).Distinct().ToList();
             var validAccountCount = await _context.Accounts
                 .CountAsync(a => accountIds.Contains(a.Id) && a.UserId == userId && a.IsActive);
