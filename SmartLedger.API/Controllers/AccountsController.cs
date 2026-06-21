@@ -1,4 +1,4 @@
-﻿
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartLedger.API.DTOs;
@@ -14,10 +14,12 @@ namespace SmartLedger.API.Controllers
     public class AccountsController : ControllerBase
     {
         private readonly ILedgerService _ledgerService;
+        private readonly ILogger<AccountsController> _logger;
 
-        public AccountsController(ILedgerService ledgerService)
+        public AccountsController(ILedgerService ledgerService, ILogger<AccountsController> logger)
         {
             _ledgerService = ledgerService;
+            _logger = logger;
         }
 
         // ============================================================
@@ -27,13 +29,27 @@ namespace SmartLedger.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAllAccounts()
         {
-            var userId = User.GetSmartLedgerUserId();
-            if (string.IsNullOrWhiteSpace(userId))
-                return Unauthorized();
+            try
+            {
+                var userId = User.GetSmartLedgerUserId();
+                if (string.IsNullOrWhiteSpace(userId))
+                    return Unauthorized();
 
-            var accounts = await _ledgerService.GetAllAccountsAsync(userId);
-            var response = await Task.WhenAll(accounts.Select(account => MapToAccountResponseDtoAsync(account, userId)));
-            return Ok(response.OrderBy(a => a.AccountCode));
+                _logger.LogInformation($"Getting all accounts for user: {userId}");
+                
+                var accounts = await _ledgerService.GetAllAccountsAsync(userId);
+                _logger.LogInformation($"Found {accounts.Count()} accounts");
+                
+                var response = await Task.WhenAll(accounts.Select(account => MapToAccountResponseDtoAsync(account, userId)));
+                _logger.LogInformation("Successfully mapped accounts to response DTOs");
+                
+                return Ok(response.OrderBy(a => a.AccountCode));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting all accounts");
+                return StatusCode(500, new { message = "Error getting accounts", details = ex.Message });
+            }
         }
 
         // ============================================================
@@ -43,15 +59,23 @@ namespace SmartLedger.API.Controllers
         [HttpGet("{id}")]
         public async Task<IActionResult> GetAccountById(int id)
         {
-            var userId = User.GetSmartLedgerUserId();
-            if (string.IsNullOrWhiteSpace(userId))
-                return Unauthorized();
+            try
+            {
+                var userId = User.GetSmartLedgerUserId();
+                if (string.IsNullOrWhiteSpace(userId))
+                    return Unauthorized();
 
-            var account = await _ledgerService.GetAccountByIdAsync(id, userId);
-            if (account == null)
-                return NotFound(new { message = $"Account with ID {id} not found" });
+                var account = await _ledgerService.GetAccountByIdAsync(id, userId);
+                if (account == null)
+                    return NotFound(new { message = $"Account with ID {id} not found" });
 
-            return Ok(await MapToAccountResponseDtoAsync(account, userId));
+                return Ok(await MapToAccountResponseDtoAsync(account, userId));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error getting account with ID {id}");
+                return StatusCode(500, new { message = "Error getting account", details = ex.Message });
+            }
         }
 
         // ============================================================
@@ -151,13 +175,28 @@ namespace SmartLedger.API.Controllers
         private async Task<AccountResponseDto> MapToAccountResponseDtoAsync(Account account, string userId)
         {
             var parentAccountName = string.Empty;
-            if (account.ParentAccountId.HasValue)
+            try
             {
-                var parentAccount = await _ledgerService.GetAccountByIdAsync(account.ParentAccountId.Value, userId);
-                parentAccountName = parentAccount?.Name ?? string.Empty;
+                if (account.ParentAccountId.HasValue)
+                {
+                    var parentAccount = await _ledgerService.GetAccountByIdAsync(account.ParentAccountId.Value, userId);
+                    parentAccountName = parentAccount?.Name ?? string.Empty;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, $"Error getting parent account for account {account.Id}");
             }
 
-            var balance = await _ledgerService.GetAccountBalanceAsync(account.Id, userId);
+            var balance = 0m;
+            try
+            {
+                balance = await _ledgerService.GetAccountBalanceAsync(account.Id, userId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, $"Error getting balance for account {account.Id}");
+            }
 
             return new AccountResponseDto
             {
